@@ -308,6 +308,30 @@ class FEATBaseTransformer3_2d(FEATBaseTransformer3):
     
         # query: (num_batch, num_query, num_proto, num_emb)
         # proto: (num_batch, num_proto, num_emb)
+        if self.args.method == 'proto_net_only':
+            proto = proto.permute(0, 2, 1).contiguous()
+            proto = proto.view(-1, emb_dim, spatial_dim, spatial_dim)
+            query = query.view(-1, emb_dim, spatial_dim, spatial_dim)
+            if isinstance(self.embed_pool, torch.nn.Identity):
+                proto = proto.reshape(proto.shape[0], -1).unsqueeze(0)
+                query = query.reshape(query.shape[0], -1)
+                emb_dim = emb_dim*(spatial_dim**2)
+            else:
+                proto = self.embed_pool(proto, kernel_size=5).squeeze().unsqueeze(0)
+                query = self.embed_pool(query, kernel_size=5).squeeze()
+            num_batch = proto.shape[0]
+            num_proto = proto.shape[1]
+            num_query = np.prod(query_idx.shape[-2:])
+            # print(proto.shape, query.shape)
+
+            query = query.view(-1, emb_dim).unsqueeze(1) # (Nbatch*Nq*Nw, 1, d)
+            proto = proto.unsqueeze(1).expand(num_batch, num_query, num_proto, emb_dim).contiguous()
+            proto = proto.view(num_batch*num_query, num_proto, emb_dim) # (Nbatch x Nq, Nk, d)
+            # print(proto.shape, query.shape)
+
+            logits = - torch.mean((proto - query) ** 2, 2) / self.args.temperature
+            return logits
+
         
 
         if self.feat_attn==2:

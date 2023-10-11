@@ -30,6 +30,9 @@ if __name__ == '__main__':
     pprint(vars(args))
 
     set_gpu(args.gpu)
+
+    args.method = 'proto_net_only'
+
     trainer = FSLTrainer(args)
 
     if args.test is None:

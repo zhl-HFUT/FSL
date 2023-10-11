@@ -166,80 +166,34 @@ class FSLTrainer(Trainer):
                 data_tm = time.time()
                 self.dt.add(data_tm - start_tm)
                 
-                if self.pass_ids:
-                    # logits, reg_logits = self.para_model(data, ids) # unhide this for prev functionality
-                    if self.return_simclr:
-                        logits, reg_logits = self.model(data, ids, simclr_images=data_simclr)
-                    else:
-                        logits, reg_logits, metrics, sims, pure_index = self.model(data, ids, key_cls=gt_label[:5])
-                        # logits, reg_logits = self.model(data, ids)
+                if self.args.method == 'proto_net_only':
+                    logits = self.model(data, ids, key_cls=gt_label[:5])
+                    loss_meta = F.cross_entropy(logits, label)
+                    total_loss = loss_meta
                 else:
-                    # logits, reg_logits = self.para_model(data)
-                    if self.return_simclr:
-                        logits, reg_logits = self.model(data, simclr_images=data_simclr)
-                    else:
-                        logits, reg_logits = self.model(data)
+                    logits, reg_logits, metrics, sims, pure_index = self.model(data, ids, key_cls=gt_label[:5])
 
-                sims = torch.tensor(sims).cuda()
-                pure_index = torch.tensor(pure_index).cuda()
-                pos_index = []
-                for j in range(len(sims)):
-                    if sims[j] >= 0.8:
-                        pos_index.append(j)
-                pos_index = torch.tensor(pos_index).cuda()
-                weight_sum = sims.sum()
-                metric_exp_sum = torch.exp(metrics).sum()
-                label_moco = torch.tensor(0).type(torch.cuda.LongTensor)
-                # loss_infoNCE = loss_infoNCE + F.cross_entropy(metrics, label_moco)
-                loss_infoNCE_neg = F.cross_entropy(torch.index_select(metrics, 0, pure_index).unsqueeze(0), label_moco.unsqueeze(0))
-                # loss_sup_con = - (torch.log(torch.exp(torch.index_select(metrics, 0, pos_index)) / metric_exp_sum) * torch.index_select(sims, 0, pos_index)).sum()/weight_sum
-                # print('loss_sup_con:', loss_sup_con.item())
-                # loss_pos = torch.tensor(1.0/0.07).cuda() - metrics[0]
+                    sims = torch.tensor(sims).cuda()
+                    pure_index = torch.tensor(pure_index).cuda()
+                    pos_index = []
+                    for j in range(len(sims)):
+                        if sims[j] >= 0.8:
+                            pos_index.append(j)
+                    pos_index = torch.tensor(pos_index).cuda()
+                    weight_sum = sims.sum()
+                    metric_exp_sum = torch.exp(metrics).sum()
+                    label_moco = torch.tensor(0).type(torch.cuda.LongTensor)
+                    # loss_infoNCE = loss_infoNCE + F.cross_entropy(metrics, label_moco)
+                    loss_infoNCE_neg = F.cross_entropy(torch.index_select(metrics, 0, pure_index).unsqueeze(0), label_moco.unsqueeze(0))
+                    # loss_sup_con = - (torch.log(torch.exp(torch.index_select(metrics, 0, pos_index)) / metric_exp_sum) * torch.index_select(sims, 0, pos_index)).sum()/weight_sum
+                    # print('loss_sup_con:', loss_sup_con.item())
+                    # loss_pos = torch.tensor(1.0/0.07).cuda() - metrics[0]
 
-                aux_loss = None
-                if reg_logits is not None:
-                    loss = F.cross_entropy(logits, label)
-                    if self.return_simclr:
-                        if self.args.simclr_loss_type == 'ver1':
-                        
-                                # print('reg_logits ', [reg_logits.shape,reg_logits.min(), reg_logits.max()])
-                                # print(reg_logits)
-                                reg_logits = F.log_softmax(reg_logits, dim=2)
-                                # print('after softmax ', [reg_logits.shape,reg_logits.min(), reg_logits.max()])
-                                # print(label_aux)
-                                reg_logits = reg_logits.reshape(-1, self.args.way)
-                                # print('reg logits after reshape ', reg_logits.shape)
-                                aux_loss = F.nll_loss(reg_logits, label_aux, reduction='mean')
-                                
-
-                                total_loss = loss + args.balance * aux_loss
-                                # print('loss, aux_loss')
-                                # print([loss, aux_loss])
-                                # asd
-                                # print('total ', total_loss)
-                                # asd
-                        elif self.args.simclr_loss_type == 'ver2.1':
-                            aux_loss = F.cross_entropy(reg_logits, label_aux)
-                            # print('loss, aux_loss ', [loss, aux_loss])
-                            total_loss = loss + args.balance * aux_loss
-                            # asd]
-                        elif self.args.simclr_loss_type == 'ver2.2':
-                            # print('self.model.label_aux ', self.model.label_aux)
-                            # asd
-
-                            aux_loss = F.cross_entropy(reg_logits, self.model.label_aux)
-                            # print('loss, aux_loss ', [loss, aux_loss])
-                            total_loss = loss + args.balance * aux_loss
-
-                    
-                    
-                    else:
-                        total_loss = (1-args.balance)*loss + args.balance * self.loss(reg_logits, label_aux)
-                else:
                     # loss = self.loss(logits, label)
                     # total_loss = self.loss(logits, label)
                     loss_meta = F.cross_entropy(logits, label)
                     total_loss = loss_meta + loss_infoNCE_neg
+                
                 tl2.add(loss_meta)
                 forward_tm = time.time()
                 self.ft.add(forward_tm - data_tm)
@@ -247,7 +201,7 @@ class FSLTrainer(Trainer):
 
                 tl1.add(total_loss.item())
                 ta.add(acc)
-                self.try_logging(total_loss, loss_meta, acc, aux_loss=aux_loss)
+                self.try_logging(total_loss, loss_meta, acc, aux_loss=None)
                 # tca.add(logits.cpu(), gt_label[self.args.way:].cpu())
 
                 # self.optimizer.zero_grad()

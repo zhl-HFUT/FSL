@@ -121,6 +121,9 @@ class FewShotModel(nn.Module):
                 origin_proto, proto, query = self._forward(instance_embs, 
                         support_idx, query_idx, key_cls=key_cls, ids=ids, simclr_embs=simclr_embs, return_intermediate=return_intermediate)
                 return origin_proto, proto, query
+            if self.args.method == 'proto_net_only':
+                logits = self._forward(instance_embs, support_idx, query_idx, key_cls=key_cls, ids=ids, simclr_embs=simclr_embs, return_intermediate=False)
+                return logits
 
             if self.training:
                 if self.args.pass_ids:
