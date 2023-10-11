@@ -42,9 +42,13 @@ class FewShotModel(nn.Module):
         # classes of task in quene
         self.classes = np.ones((self.K, 5), dtype=int)*1000
 
+        self.register_buffer("memory", torch.randn(64, 1600))
+        self.register_buffer("memory_traget", torch.randn(64, 1600))
+
         if args.backbone_class == 'ConvNet':
             from model.networks.convnet import ConvNet
             self.encoder = ConvNet(resize=resize, sal=sal, max_pool=max_pool)
+            self.encoder_target = ConvNet(resize=resize, sal=sal, max_pool=max_pool)
             hdim = 64
         else:
             raise ValueError('')
