@@ -39,6 +39,13 @@ class FSLTrainer(Trainer):
         self.return_simclr = True if args.return_simclr is not None else False
         self.train_loader, self.val_loader, self.test_loader = get_dataloader(args)
         self.model, self.para_model = prepare_model(args)
+        for param, param_k in zip(self.model.encoder.parameters(), self.model.encoder_target.parameters()):
+            param_k.data.copy_(param.data)
+            param_k.requires_grad = False
+        
+        for param, param_k in zip(self.model.proj_head.parameters(), self.model.proj_head_target.parameters()):
+            param_k.data.copy_(param.data)
+            param_k.requires_grad = False
         self.optimizer, self.lr_scheduler = prepare_optimizer(self.model, args)
         self.pass_ids = bool(args.pass_ids) # to remove same class instances during training using base dataset
         self.mixed_precision = args.mixed_precision
@@ -137,31 +144,7 @@ class FSLTrainer(Trainer):
 
                 self.train_step += 1
 
-                if torch.cuda.is_available():
- 
-                    if self.pass_ids:
-                        if self.return_simclr:
-                            data, gt_label, ids, data_simclr = batch[0].cuda(), batch[1].cuda(), batch[2], batch[3].cuda()
-                        else:
-                            data, gt_label, ids = batch[0].cuda(), batch[1].cuda(), batch[2]
-                    else:
-                        if self.return_simclr:
-                            data, gt_label, data_simclr = [_.cuda() for _ in batch]
-                        else:
-                            data, gt_label = [_.cuda() for _ in batch]
-                else:
-                    if self.pass_ids:
-                        if self.return_simclr:
-                            data, gt_label, ids, data_simclr = batch[0], batch[1], batch[2], batch[3]
-                        else:
-                            data, gt_label, ids = batch[0], batch[1], batch[2]
-                    else:
-                        if self.return_simclr:
-                            data, gt_label, data_simclr = batch[0], batch[1], batch[2]
-                        else:
-                            data, gt_label = batch[0], batch[1]
-
-                # print('data_simclr ', [data_simclr.shape, data_simclr.min(), data_simclr.max()])
+                data, gt_label, ids = batch[0].cuda(), batch[1].cuda(), batch[2]
                 
                 data_tm = time.time()
                 self.dt.add(data_tm - start_tm)
@@ -170,6 +153,17 @@ class FSLTrainer(Trainer):
                     logits = self.model(data, ids, key_cls=gt_label[:5])
                     loss_meta = F.cross_entropy(logits, label)
                     total_loss = loss_meta
+                elif self.args.method == 'proto_FGKVM':
+                    logits, proj_support_mempred, proj_support_target = self.model(data, ids, key_cls=gt_label[:5])
+                    loss_meta = F.cross_entropy(logits, label)
+                    # total_loss = loss_meta + Lmempred
+                    Lmempred = torch.tensor(5.).cuda()
+                    for pred, target in zip(proj_support_mempred, proj_support_target):
+                        Lmempred -= torch.nn.functional.cosine_similarity(pred, target, dim=0)
+                        print(torch.nn.functional.cosine_similarity(pred, target, dim=0))
+                    print('Lmempred:', Lmempred)
+                    total_loss = Lmempred + loss_meta
+                    # total_loss = loss_meta
                 else:
                     logits, reg_logits, metrics, sims, pure_index = self.model(data, ids, key_cls=gt_label[:5])
 
@@ -241,7 +235,8 @@ class FSLTrainer(Trainer):
             # print(tca.item())
             self.try_evaluate(epoch)
             self.save_model('epoch-last')
-            self.evaluate_test('epoch-last.pth')
+            if self.train_epoch%20 == 0:
+                self.evaluate_test('epoch-last.pth')
 
 
 

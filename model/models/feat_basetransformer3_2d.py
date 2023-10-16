@@ -235,7 +235,8 @@ class FEATBaseTransformer3_2d(FEATBaseTransformer3):
         return base_protos
 
 
-    def _forward(self, instance_embs, support_idx, query_idx, ids=None, simclr_embs=None, key_cls=None, return_intermediate=False):
+    def _forward(self, instance_embs, support_idx, query_idx, ids=None, simclr_embs=None, key_cls=None, return_intermediate=False
+                 , instance_embs_target=None):
         
         if self.channel_reduction:
             instance_embs = self.channel_reduction(instance_embs)
@@ -249,7 +250,10 @@ class FEATBaseTransformer3_2d(FEATBaseTransformer3):
 
         support = instance_embs[support_idx.contiguous().view(-1)].contiguous().view(*(support_idx.shape + (emb_dim, spatial_dim, spatial_dim,)))
         query   = instance_embs[query_idx.contiguous().view(-1)].contiguous().view(  *(query_idx.shape   + (emb_dim, spatial_dim, spatial_dim,)))
-    
+        if self.args.method == 'proto_FGKVM' and self.training:
+            support_target = instance_embs_target[(support_idx+5).contiguous().view(-1)].contiguous().view(-1, 1600)
+        # print(support_target.shape) # (5, 1600)
+
         self.save_as_numpy(support, 'support')
         self.save_as_numpy(support, 'query')
 
@@ -304,6 +308,80 @@ class FEATBaseTransformer3_2d(FEATBaseTransformer3):
         base_protos = base_protos.permute(0, 2, 1, 3, 4).contiguous()
         combined_protos = base_protos.reshape(n_class*n_batch, emb_dim, -1).permute(0, 2, 1).contiguous()
         self.save_as_numpy(combined_protos, 'combined_protos')
+
+        if self.args.method == 'proto_FGKVM' and self.training:
+            proto = proto.permute(0, 2, 1).contiguous()
+            proto = proto.view(-1, emb_dim, spatial_dim, spatial_dim)
+            query = query.view(-1, emb_dim, spatial_dim, spatial_dim)
+            if isinstance(self.embed_pool, torch.nn.Identity):
+                proto = proto.reshape(proto.shape[0], -1).unsqueeze(0)
+                query = query.reshape(query.shape[0], -1)
+                emb_dim = emb_dim*(spatial_dim**2)
+            else:
+                proto = self.embed_pool(proto, kernel_size=5).squeeze().unsqueeze(0)
+                query = self.embed_pool(query, kernel_size=5).squeeze()
+            num_batch = proto.shape[0]
+            num_proto = proto.shape[1]
+            num_query = np.prod(query_idx.shape[-2:])
+            # print('proto_FGKVM')
+            # print('proto shape', proto.shape)
+            # print('query shape', query.shape)
+            # print('support_target shape', support_target.shape)
+            # return proto.squeeze(0), query, support_target
+            # for t1, t2 in zip(proto.squeeze(0), proto.squeeze(0)):
+            #     print(t1, t2)
+            #     print('same cos sim:', torch.nn.functional.cosine_similarity(t1, t2, dim=0))
+            # for t1, t2 in zip(support_target, proto.squeeze(0)):
+            #     print(t1, t2)
+            #     print('two encoder cos sim:', torch.nn.functional.cosine_similarity(t1, t2, dim=0))
+            # for t1, t2 in zip(query[5:10], proto.squeeze(0)):
+            #     print(t1, t2)
+            #     print('one encoder cos sim:', torch.nn.functional.cosine_similarity(t1, t2, dim=0))
+            proj_support = self.proj_head(proto.squeeze(0))
+            # print('proj_support:', proj_support.shape)
+            proj_support_target = self.proj_head_target(support_target)
+            proj_query = self.proj_head(query)
+            # print('proj_support_target:', proj_support_target.shape)
+            
+            # 将 tensors 和 memory 转换为适当的形状
+            memory = self.memory.transpose(0, 1).unsqueeze(0)
+            proj_support = proj_support.unsqueeze(0)
+
+            # 使用 torch.bmm 计算批量的矩阵乘法
+            sims = torch.bmm(proj_support, memory)
+
+            # 将 sims 压缩到两个维度
+            sims = sims.squeeze(0)
+
+            # 计算每个向量的范数
+            norms_memory = torch.norm(memory, dim=1)
+            norms_tensors = torch.norm(proj_support, dim=2)
+
+            # 计算余弦相似度
+            sims = sims / (norms_memory * norms_tensors.transpose(0, 1))
+            # 乘以缩放因子
+            scaling_factor = 16
+            sims = sims * scaling_factor
+
+            # 计算 softmax
+            sims = F.softmax(sims, dim=1)
+            # print('sims:', sims.shape)
+            proj_support_mempred = torch.mm(sims, self.memory_target)
+            # print('proj_support_mempred:', proj_support_mempred.shape)
+
+            # query = query.view(-1, emb_dim).unsqueeze(1) # (Nbatch*Nq*Nw, 1, d)
+            # proto = proto.unsqueeze(1).expand(num_batch, num_query, num_proto, emb_dim).contiguous()
+            # proto = proto.view(num_batch*num_query, num_proto, emb_dim) # (Nbatch x Nq, Nk, d)
+            proj_query = proj_query.view(-1, 256).unsqueeze(1)
+            proj_support = proj_support.unsqueeze(1).expand(num_batch, num_query, num_proto, 256).contiguous()
+            proj_support = proj_support.view(num_batch*num_query, num_proto, 256)
+            # print(num_batch, num_query, num_proto, emb_dim)
+            # print(proto.shape, query.shape)
+
+            # logits = - torch.mean((proto - query) ** 2, 2) / self.args.temperature
+            logits = - torch.mean((proj_support - proj_query) ** 2, 2) / self.args.temperature
+            self._momentum_update_key_encoder()
+            return logits, proj_support_mempred, proj_support_target
 
     
         # query: (num_batch, num_query, num_proto, num_emb)

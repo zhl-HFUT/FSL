@@ -25,6 +25,20 @@ class BidirectionalLSTM(nn.Module):
         h0 = torch.rand(self.lstm.num_layers*2, self.batch_size, self.lstm.hidden_size, requires_grad=False).cuda().half()
         output, (hn, cn) = self.lstm(inputs, (h0, c0))
         return output, hn, cn
+    
+class ProjectionHead(nn.Module):
+    def __init__(self, input_dim=1600, hidden_dim=4096, output_dim=256):
+        super(ProjectionHead, self).__init__()
+        self.projection = nn.Sequential(
+            nn.Linear(input_dim, hidden_dim),
+            nn.BatchNorm1d(hidden_dim),  # 批量归一化
+            nn.ReLU(),
+            nn.Linear(hidden_dim, output_dim)
+        )
+
+    def forward(self, x):
+        projected_features = self.projection(x)
+        return projected_features
 
 
 class FewShotModel(nn.Module):
@@ -34,7 +48,7 @@ class FewShotModel(nn.Module):
 
         self.lstm = BidirectionalLSTM(layer_sizes=[256], batch_size=1, vector_dim = 1600)
         self.K = 256
-        self.m = 0.99
+        self.m = 0.996
         self.T = 0.07
         self.register_buffer("queue", torch.randn(self.K, 256))
         self.queue = nn.functional.normalize(self.queue, dim=1)
@@ -42,8 +56,12 @@ class FewShotModel(nn.Module):
         # classes of task in quene
         self.classes = np.ones((self.K, 5), dtype=int)*1000
 
-        self.register_buffer("memory", torch.randn(64, 1600))
-        self.register_buffer("memory_traget", torch.randn(64, 1600))
+        self.register_buffer("memory", torch.randn(4096, 256))
+        self.memory = nn.functional.normalize(self.memory, dim=1)
+        self.register_buffer("memory_target", torch.randn(4096, 256))
+        self.memory_target = nn.functional.normalize(self.memory_target, dim=1)
+        self.proj_head = ProjectionHead()
+        self.proj_head_target = ProjectionHead()
 
         if args.backbone_class == 'ConvNet':
             from model.networks.convnet import ConvNet
@@ -54,6 +72,14 @@ class FewShotModel(nn.Module):
             raise ValueError('')
         self.sal_crop = args.sal_crop
         self.hdim = hdim
+
+    @torch.no_grad()
+    def _momentum_update_key_encoder(self):
+        # print('update key encoder')
+        for param, param_k in zip(self.encoder.parameters(), self.encoder_target.parameters()):
+            param_k.data = param_k.data * self.m + param.data * (1. - self.m)
+        for param, param_k in zip(self.proj_head.parameters(), self.proj_head_target.parameters()):
+            param_k.data = param_k.data * self.m + param.data * (1. - self.m)
 
     @torch.no_grad()
     def _dequeue_and_enqueue(self, key, key_cls):
@@ -99,6 +125,7 @@ class FewShotModel(nn.Module):
             # feature extraction
             x = x.squeeze(0)
             instance_embs = self.encoder(x)
+            instance_embs_target = self.encoder_target(x)
             num_inst = instance_embs.shape[0]
             # split support query set for few-shot data
             support_idx, query_idx = self.split_instances(x)
@@ -122,7 +149,12 @@ class FewShotModel(nn.Module):
                         support_idx, query_idx, key_cls=key_cls, ids=ids, simclr_embs=simclr_embs, return_intermediate=return_intermediate)
                 return origin_proto, proto, query
             if self.args.method == 'proto_net_only':
-                logits = self._forward(instance_embs, support_idx, query_idx, key_cls=key_cls, ids=ids, simclr_embs=simclr_embs, return_intermediate=False)
+                logits, proj_support_mempred, proj_support_target = self._forward(instance_embs, support_idx, query_idx, key_cls=key_cls, ids=ids, simclr_embs=simclr_embs, return_intermediate=False)
+                return logits, proj_support_mempred, proj_support_target
+            if self.args.method == 'proto_FGKVM' and self.training:
+                logits = self._forward(instance_embs, support_idx, query_idx, key_cls=key_cls, ids=ids
+                                       , simclr_embs=simclr_embs, return_intermediate=False
+                                       , instance_embs_target=instance_embs_target)
                 return logits
 
             if self.training:
