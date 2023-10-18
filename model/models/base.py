@@ -31,7 +31,7 @@ class ProjectionHead(nn.Module):
         super(ProjectionHead, self).__init__()
         self.projection = nn.Sequential(
             nn.Linear(input_dim, hidden_dim),
-            nn.BatchNorm1d(hidden_dim),  # 批量归一化
+            nn.BatchNorm1d(hidden_dim),
             nn.ReLU(),
             nn.Linear(hidden_dim, output_dim)
         )
@@ -56,10 +56,9 @@ class FewShotModel(nn.Module):
         # classes of task in quene
         self.classes = np.ones((self.K, 5), dtype=int)*1000
 
-        self.register_buffer("memory", torch.randn(4096, 256))
-        self.memory = nn.functional.normalize(self.memory, dim=1)
-        self.register_buffer("memory_target", torch.randn(4096, 256))
-        self.memory_target = nn.functional.normalize(self.memory_target, dim=1)
+        self.memory = nn.Parameter(nn.functional.normalize(torch.randn(4096, 256), dim=1))
+        self.memory_target = nn.Parameter(nn.functional.normalize(torch.randn(4096, 256), dim=1))
+
         self.proj_head = ProjectionHead()
         self.proj_head_target = ProjectionHead()
 
@@ -151,11 +150,17 @@ class FewShotModel(nn.Module):
             if self.args.method == 'proto_net_only':
                 logits, proj_support_mempred, proj_support_target = self._forward(instance_embs, support_idx, query_idx, key_cls=key_cls, ids=ids, simclr_embs=simclr_embs, return_intermediate=False)
                 return logits, proj_support_mempred, proj_support_target
-            if self.args.method == 'proto_FGKVM' and self.training:
-                logits = self._forward(instance_embs, support_idx, query_idx, key_cls=key_cls, ids=ids
-                                       , simclr_embs=simclr_embs, return_intermediate=False
-                                       , instance_embs_target=instance_embs_target)
-                return logits
+            if self.args.method == 'proto_FGKVM':
+                if self.training:
+                    logits, proj_support_mempred, proj_support_target = self._forward(instance_embs, support_idx, query_idx, key_cls=key_cls, ids=ids
+                                        , simclr_embs=simclr_embs, return_intermediate=False
+                                        , instance_embs_target=instance_embs_target)
+                    return logits, proj_support_mempred, proj_support_target
+                else:
+                    logits = self._forward(instance_embs, support_idx, query_idx, key_cls=key_cls, ids=ids
+                                        , simclr_embs=simclr_embs, return_intermediate=False
+                                        , instance_embs_target=instance_embs_target)
+                    return logits
 
             if self.training:
                 if self.args.pass_ids:

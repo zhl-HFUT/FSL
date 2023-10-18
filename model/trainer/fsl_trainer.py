@@ -162,8 +162,8 @@ class FSLTrainer(Trainer):
                         Lmempred -= torch.nn.functional.cosine_similarity(pred, target, dim=0)
                         print(torch.nn.functional.cosine_similarity(pred, target, dim=0))
                     print('Lmempred:', Lmempred)
-                    total_loss = Lmempred + loss_meta
-                    # total_loss = loss_meta
+                    total_loss = Lmempred + loss_meta*30
+                    # total_loss = loss_meta*30
                 else:
                     logits, reg_logits, metrics, sims, pure_index = self.model(data, ids, key_cls=gt_label[:5])
 
@@ -205,6 +205,7 @@ class FSLTrainer(Trainer):
                         scaled_loss.backward()
                 else:
                     total_loss.backward()
+                self.model._momentum_update_key_encoder()
 
 
                 # step optimizer
@@ -235,8 +236,8 @@ class FSLTrainer(Trainer):
             # print(tca.item())
             self.try_evaluate(epoch)
             self.save_model('epoch-last')
-            if self.train_epoch%20 == 0:
-                self.evaluate_test('epoch-last.pth')
+            # if self.train_epoch%20 == 0:
+            #     self.evaluate_test('epoch-last.pth')
 
 
 

@@ -250,8 +250,9 @@ class FEATBaseTransformer3_2d(FEATBaseTransformer3):
 
         support = instance_embs[support_idx.contiguous().view(-1)].contiguous().view(*(support_idx.shape + (emb_dim, spatial_dim, spatial_dim,)))
         query   = instance_embs[query_idx.contiguous().view(-1)].contiguous().view(  *(query_idx.shape   + (emb_dim, spatial_dim, spatial_dim,)))
-        if self.args.method == 'proto_FGKVM' and self.training:
-            support_target = instance_embs_target[(support_idx+5).contiguous().view(-1)].contiguous().view(-1, 1600)
+        if self.args.method == 'proto_FGKVM':
+            if self.training:
+                support_target = instance_embs_target[(support_idx+5).contiguous().view(-1)].contiguous().view(-1, 1600)
         # print(support_target.shape) # (5, 1600)
 
         self.save_as_numpy(support, 'support')
@@ -309,7 +310,7 @@ class FEATBaseTransformer3_2d(FEATBaseTransformer3):
         combined_protos = base_protos.reshape(n_class*n_batch, emb_dim, -1).permute(0, 2, 1).contiguous()
         self.save_as_numpy(combined_protos, 'combined_protos')
 
-        if self.args.method == 'proto_FGKVM' and self.training:
+        if self.args.method == 'proto_FGKVM':
             proto = proto.permute(0, 2, 1).contiguous()
             proto = proto.view(-1, emb_dim, spatial_dim, spatial_dim)
             query = query.view(-1, emb_dim, spatial_dim, spatial_dim)
@@ -337,9 +338,11 @@ class FEATBaseTransformer3_2d(FEATBaseTransformer3):
             # for t1, t2 in zip(query[5:10], proto.squeeze(0)):
             #     print(t1, t2)
             #     print('one encoder cos sim:', torch.nn.functional.cosine_similarity(t1, t2, dim=0))
+            
             proj_support = self.proj_head(proto.squeeze(0))
             # print('proj_support:', proj_support.shape)
-            proj_support_target = self.proj_head_target(support_target)
+            if self.training:
+                proj_support_target = self.proj_head_target(support_target)
             proj_query = self.proj_head(query)
             # print('proj_support_target:', proj_support_target.shape)
             
@@ -373,15 +376,17 @@ class FEATBaseTransformer3_2d(FEATBaseTransformer3):
             # proto = proto.unsqueeze(1).expand(num_batch, num_query, num_proto, emb_dim).contiguous()
             # proto = proto.view(num_batch*num_query, num_proto, emb_dim) # (Nbatch x Nq, Nk, d)
             proj_query = proj_query.view(-1, 256).unsqueeze(1)
-            proj_support = proj_support.unsqueeze(1).expand(num_batch, num_query, num_proto, 256).contiguous()
-            proj_support = proj_support.view(num_batch*num_query, num_proto, 256)
+            final_support = proj_support_mempred.unsqueeze(0).unsqueeze(1).expand(num_batch, num_query, num_proto, 256).contiguous()
+            final_support = final_support.view(num_batch*num_query, num_proto, 256)
             # print(num_batch, num_query, num_proto, emb_dim)
             # print(proto.shape, query.shape)
 
             # logits = - torch.mean((proto - query) ** 2, 2) / self.args.temperature
-            logits = - torch.mean((proj_support - proj_query) ** 2, 2) / self.args.temperature
-            self._momentum_update_key_encoder()
-            return logits, proj_support_mempred, proj_support_target
+            logits = - torch.mean((final_support - proj_query) ** 2, 2) / self.args.temperature
+            if self.training:
+                return logits, proj_support_mempred, proj_support_target
+            else:
+                return logits
 
     
         # query: (num_batch, num_query, num_proto, num_emb)

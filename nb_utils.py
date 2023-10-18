@@ -67,7 +67,7 @@ def get_parser():
     args.fast_query = './embeds_cache/fastq_imgnet_wordnet_pathsim_random-preset-wts.pt'
     args.embeds_cache_2d = './embeds_cache/embeds_cache_cnn4_contrastive-init-ver1-1-corrected_2d.pt'
     args.wandb_mode = 'disabled'
-    args.mixed_precision = 'O2'
+    # args.mixed_precision = 'O2'
     args.z_norm = 'before_tx'
 
     return args
