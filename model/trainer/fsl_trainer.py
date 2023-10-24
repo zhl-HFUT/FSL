@@ -154,16 +154,21 @@ class FSLTrainer(Trainer):
                     loss_meta = F.cross_entropy(logits, label)
                     total_loss = loss_meta
                 elif self.args.method == 'proto_FGKVM':
-                    logits, proj_support_mempred, proj_support_target = self.model(data, ids, key_cls=gt_label[:5])
+                    logits, kvmpred, kvmtarget = self.model(data, ids, key_cls=gt_label[:5])
                     loss_meta = F.cross_entropy(logits, label)
                     # total_loss = loss_meta + Lmempred
-                    Lmempred = torch.tensor(5.).cuda()
-                    for pred, target in zip(proj_support_mempred, proj_support_target):
-                        Lmempred -= torch.nn.functional.cosine_similarity(pred, target, dim=0)
-                        print(torch.nn.functional.cosine_similarity(pred, target, dim=0))
-                    print('Lmempred:', Lmempred)
-                    total_loss = Lmempred + loss_meta*30
-                    # total_loss = loss_meta*30
+                    Lmempred = torch.tensor(80.).cuda()
+                    # if self.train_step%100==0:
+                    #     for pred in kvmpred:
+                    #         for target in kvmtarget:
+                    #             print(torch.nn.functional.cosine_similarity(pred, target, dim=0))
+                    # for pred, target in zip(kvmpred, kvmtarget):
+                    #     Lmempred -= torch.nn.functional.cosine_similarity(pred, target, dim=0)
+                    #     if self.train_step%100==0:
+                    #         print(torch.nn.functional.cosine_similarity(pred, target, dim=0))
+                    # print('Lmempred:', Lmempred)
+                    # total_loss = Lmempred + loss_meta*30
+                    total_loss = loss_meta
                 else:
                     logits, reg_logits, metrics, sims, pure_index = self.model(data, ids, key_cls=gt_label[:5])
 
@@ -236,8 +241,8 @@ class FSLTrainer(Trainer):
             # print(tca.item())
             self.try_evaluate(epoch)
             self.save_model('epoch-last')
-            # if self.train_epoch%20 == 0:
-            #     self.evaluate_test('epoch-last.pth')
+            if self.train_epoch%40 == 0:
+                self.evaluate_test('epoch-last.pth')
 
 
 

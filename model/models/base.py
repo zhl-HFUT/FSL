@@ -27,7 +27,7 @@ class BidirectionalLSTM(nn.Module):
         return output, hn, cn
     
 class ProjectionHead(nn.Module):
-    def __init__(self, input_dim=1600, hidden_dim=4096, output_dim=256):
+    def __init__(self, input_dim=1600, hidden_dim=1600, output_dim=1600):
         super(ProjectionHead, self).__init__()
         self.projection = nn.Sequential(
             nn.Linear(input_dim, hidden_dim),
@@ -48,7 +48,7 @@ class FewShotModel(nn.Module):
 
         self.lstm = BidirectionalLSTM(layer_sizes=[256], batch_size=1, vector_dim = 1600)
         self.K = 256
-        self.m = 0.996
+        self.m = 0.99
         self.T = 0.07
         self.register_buffer("queue", torch.randn(self.K, 256))
         self.queue = nn.functional.normalize(self.queue, dim=1)
@@ -56,8 +56,8 @@ class FewShotModel(nn.Module):
         # classes of task in quene
         self.classes = np.ones((self.K, 5), dtype=int)*1000
 
-        self.memory = nn.Parameter(nn.functional.normalize(torch.randn(4096, 256), dim=1))
-        self.memory_target = nn.Parameter(nn.functional.normalize(torch.randn(4096, 256), dim=1))
+        self.memory = nn.Parameter(torch.randn(64, 1600))
+        self.memory_target = nn.Parameter(torch.randn(64, 1600))
 
         self.proj_head = ProjectionHead()
         self.proj_head_target = ProjectionHead()
@@ -152,10 +152,10 @@ class FewShotModel(nn.Module):
                 return logits, proj_support_mempred, proj_support_target
             if self.args.method == 'proto_FGKVM':
                 if self.training:
-                    logits, proj_support_mempred, proj_support_target = self._forward(instance_embs, support_idx, query_idx, key_cls=key_cls, ids=ids
+                    logits, kvmpred, kvmtarget = self._forward(instance_embs, support_idx, query_idx, key_cls=key_cls, ids=ids
                                         , simclr_embs=simclr_embs, return_intermediate=False
                                         , instance_embs_target=instance_embs_target)
-                    return logits, proj_support_mempred, proj_support_target
+                    return logits, kvmpred, kvmtarget
                 else:
                     logits = self._forward(instance_embs, support_idx, query_idx, key_cls=key_cls, ids=ids
                                         , simclr_embs=simclr_embs, return_intermediate=False

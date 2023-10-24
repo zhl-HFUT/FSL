@@ -250,9 +250,9 @@ class FEATBaseTransformer3_2d(FEATBaseTransformer3):
 
         support = instance_embs[support_idx.contiguous().view(-1)].contiguous().view(*(support_idx.shape + (emb_dim, spatial_dim, spatial_dim,)))
         query   = instance_embs[query_idx.contiguous().view(-1)].contiguous().view(  *(query_idx.shape   + (emb_dim, spatial_dim, spatial_dim,)))
-        if self.args.method == 'proto_FGKVM':
-            if self.training:
-                support_target = instance_embs_target[(support_idx+5).contiguous().view(-1)].contiguous().view(-1, 1600)
+        # if self.args.method == 'proto_FGKVM':
+        #     if self.training:
+        #         support_target = instance_embs_target[(support_idx+5).contiguous().view(-1)].contiguous().view(-1, 1600)
         # print(support_target.shape) # (5, 1600)
 
         self.save_as_numpy(support, 'support')
@@ -341,24 +341,25 @@ class FEATBaseTransformer3_2d(FEATBaseTransformer3):
             
             proj_support = self.proj_head(proto.squeeze(0))
             # print('proj_support:', proj_support.shape)
-            if self.training:
-                proj_support_target = self.proj_head_target(support_target)
+            # if self.training:
+            kvmtarget = self.proj_head_target(instance_embs_target.contiguous().view(-1, 1600))
             proj_query = self.proj_head(query)
             # print('proj_support_target:', proj_support_target.shape)
             
+            proj_embs = self.proj_head(instance_embs.contiguous().view(-1, 1600))
             # 将 tensors 和 memory 转换为适当的形状
             memory = self.memory.transpose(0, 1).unsqueeze(0)
-            proj_support = proj_support.unsqueeze(0)
+            proj_embs = proj_embs.unsqueeze(0)
 
             # 使用 torch.bmm 计算批量的矩阵乘法
-            sims = torch.bmm(proj_support, memory)
+            sims = torch.bmm(proj_embs, memory)
 
             # 将 sims 压缩到两个维度
             sims = sims.squeeze(0)
 
             # 计算每个向量的范数
             norms_memory = torch.norm(memory, dim=1)
-            norms_tensors = torch.norm(proj_support, dim=2)
+            norms_tensors = torch.norm(proj_embs, dim=2)
 
             # 计算余弦相似度
             sims = sims / (norms_memory * norms_tensors.transpose(0, 1))
@@ -369,23 +370,38 @@ class FEATBaseTransformer3_2d(FEATBaseTransformer3):
             # 计算 softmax
             sims = F.softmax(sims, dim=1)
             # print('sims:', sims.shape)
-            proj_support_mempred = torch.mm(sims, self.memory_target)
+            kvmpred = torch.mm(sims, self.memory_target)
             # print('proj_support_mempred:', proj_support_mempred.shape)
 
             # query = query.view(-1, emb_dim).unsqueeze(1) # (Nbatch*Nq*Nw, 1, d)
             # proto = proto.unsqueeze(1).expand(num_batch, num_query, num_proto, emb_dim).contiguous()
             # proto = proto.view(num_batch*num_query, num_proto, emb_dim) # (Nbatch x Nq, Nk, d)
-            proj_query = proj_query.view(-1, 256).unsqueeze(1)
-            final_support = proj_support_mempred.unsqueeze(0).unsqueeze(1).expand(num_batch, num_query, num_proto, 256).contiguous()
-            final_support = final_support.view(num_batch*num_query, num_proto, 256)
+            # proj_query = proj_query.view(-1, 256).unsqueeze(1)
+            # final_support = proj_support_mempred.unsqueeze(0).unsqueeze(1).expand(num_batch, num_query, num_proto, 256).contiguous()
+            # final_support = final_support.view(num_batch*num_query, num_proto, 256)
             # print(num_batch, num_query, num_proto, emb_dim)
             # print(proto.shape, query.shape)
 
             # logits = - torch.mean((proto - query) ** 2, 2) / self.args.temperature
-            logits = - torch.mean((final_support - proj_query) ** 2, 2) / self.args.temperature
+            # logits = - torch.mean((final_support - proj_query) ** 2, 2) / self.args.temperature
+            # proj_support_mempred = nn.functional.normalize(proj_support_mempred, dim=1)
+            support_mempred = kvmpred[0:5]
+            query_mempred = kvmpred[5:]
+            support_target = kvmtarget[0:5]
+            query_target = kvmtarget[5:]
+            
             if self.training:
-                return logits, proj_support_mempred, proj_support_target
+                
+                # logits = torch.mm(query_mempred, support_mempred.t()) + torch.mm(query_mempred, support_target.t()) + torch.mm(query_target, support_mempred.t()) + torch.mm(proj_query, proj_support.t())
+                # logits = torch.mm(proj_query, proj_support.t())
+                logits = torch.mm(query_mempred, support_mempred.t()) + torch.mm(query_mempred, support_target.t()) + torch.mm(query_target, support_mempred.t())# + torch.mm(proj_query, proj_support.t())
+                
+                return logits, kvmpred, kvmtarget
             else:
+                # logits = torch.mm(query_mempred, support_mempred.t())
+                # logits = torch.mm(proj_query, proj_support.t())
+                logits = torch.mm(query_mempred, support_mempred.t()) + torch.mm(query_mempred, support_target.t()) + torch.mm(query_target, support_mempred.t())# + torch.mm(proj_query, proj_support.t())
+                
                 return logits
 
     
