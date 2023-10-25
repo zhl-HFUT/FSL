@@ -78,7 +78,7 @@ class FEATBaseTransformer3_2d(FEATBaseTransformer3):
         # these 2d embeddings of base instances are used for combination
         
         import json
-        with open('/BaseTransformers/wordnet_sim_labels.json', 'r') as file:
+        with open('wordnet_sim_labels.json', 'r') as file:
             data = json.load(file)
         self.wordnet_sim_labels = data
          

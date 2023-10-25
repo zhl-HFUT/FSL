@@ -191,7 +191,7 @@ class FSLTrainer(Trainer):
                     # loss = self.loss(logits, label)
                     # total_loss = self.loss(logits, label)
                     loss_meta = F.cross_entropy(logits, label)
-                    total_loss = loss_meta + loss_infoNCE_neg
+                    total_loss = loss_meta# + loss_infoNCE_neg
                 
                 tl2.add(loss_meta)
                 forward_tm = time.time()
