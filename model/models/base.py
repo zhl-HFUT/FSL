@@ -57,10 +57,10 @@ class FewShotModel(nn.Module):
         self.classes = np.ones((self.K, 5), dtype=int)*1000
 
         self.memory = nn.Parameter(torch.randn(64, 1600))
-        # self.memory_target = nn.Parameter(torch.randn(64, 1600))
+        self.memory_target = nn.Parameter(torch.randn(64, 1600))
 
-        # self.proj_head = ProjectionHead()
-        # self.proj_head_target = ProjectionHead()
+        self.proj_head = ProjectionHead()
+        self.proj_head_target = ProjectionHead()
 
         if args.backbone_class == 'ConvNet':
             from model.networks.convnet import ConvNet
