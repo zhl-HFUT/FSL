@@ -21,8 +21,8 @@ class BidirectionalLSTM(nn.Module):
                             bidirectional=True)
 
     def forward(self, inputs):
-        c0 = torch.rand(self.lstm.num_layers*2, self.batch_size, self.lstm.hidden_size, requires_grad=False).cuda().half()
-        h0 = torch.rand(self.lstm.num_layers*2, self.batch_size, self.lstm.hidden_size, requires_grad=False).cuda().half()
+        c0 = torch.rand(self.lstm.num_layers*2, self.batch_size, self.lstm.hidden_size, requires_grad=False).cuda()#.half()
+        h0 = torch.rand(self.lstm.num_layers*2, self.batch_size, self.lstm.hidden_size, requires_grad=False).cuda()#.half()
         output, (hn, cn) = self.lstm(inputs, (h0, c0))
         return output, hn, cn
     
@@ -57,10 +57,10 @@ class FewShotModel(nn.Module):
         self.classes = np.ones((self.K, 5), dtype=int)*1000
 
         self.memory = nn.Parameter(torch.randn(64, 1600))
-        self.memory_target = nn.Parameter(torch.randn(64, 1600))
+        # self.memory_target = nn.Parameter(torch.randn(64, 1600))
 
-        self.proj_head = ProjectionHead()
-        self.proj_head_target = ProjectionHead()
+        # self.proj_head = ProjectionHead()
+        # self.proj_head_target = ProjectionHead()
 
         if args.backbone_class == 'ConvNet':
             from model.networks.convnet import ConvNet

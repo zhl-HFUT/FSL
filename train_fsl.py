@@ -32,7 +32,8 @@ if __name__ == '__main__':
     set_gpu(args.gpu)
 
     # args.method = 'proto_net_only'
-    args.method = 'proto_FGKVM'
+    # args.method = 'proto_FGKVM'
+    args.method = 'none'
 
     trainer = FSLTrainer(args)
 

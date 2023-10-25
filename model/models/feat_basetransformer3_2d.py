@@ -76,6 +76,11 @@ class FEATBaseTransformer3_2d(FEATBaseTransformer3):
         args.resize = False
         super().__init__(args)
         # these 2d embeddings of base instances are used for combination
+        
+        import json
+        with open('/BaseTransformers/wordnet_sim_labels.json', 'r') as file:
+            data = json.load(file)
+        self.wordnet_sim_labels = data
          
         if args.embeds_cache_2d is not None:
             print('loading 2d embeds_cache from args ', args.embeds_cache_2d)
@@ -271,8 +276,17 @@ class FEATBaseTransformer3_2d(FEATBaseTransformer3):
             base_protos = self.get_base_protos(proto, ids) # 
         else:
             base_protos = self.get_base_protos_fast_query(ids[:5])
+        
+        # print('base_protos', base_protos.shape)
             # base_protos = self.get_base_protos_fast_query_ti_temp(ids[:5])
-        self.save_as_numpy(base_protos, 'base_protos')
+        # self.save_as_numpy(base_protos, 'base_protos')
+        # print('get memory prototypes')
+        # print(ids)
+        top_indices = np.stack([self.wordnet_sim_labels[id_[:11]] for id_ in ids[:5]], axis=0)
+        base_protos = self.memory[torch.Tensor(top_indices).long()].reshape(5, 5, 64, 5, 5)
+        # print('base_protos', base_protos.shape)
+        
+        # return base_protos
         # base_protos n_class * topk * 64 * (5 * 5)
 
         if self.baseinstance_2d_norm:
