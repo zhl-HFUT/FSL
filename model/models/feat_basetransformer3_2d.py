@@ -269,6 +269,11 @@ class FEATBaseTransformer3_2d(FEATBaseTransformer3):
         n_batch = proto.shape[0]
         k = self.args.k
 
+        if self.training:
+            for i, cls in enumerate(key_cls):
+                # print(cls)
+                self.memory.data[cls] = (1 - 0.99) * self.memory.data[cls] + 0.99 * instance_embs.view(80, 1600)[i::5].mean(dim=0)
+
         # get topk base instances
  
         # if self.fast_query is None:
