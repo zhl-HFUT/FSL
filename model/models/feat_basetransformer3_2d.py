@@ -271,11 +271,11 @@ class FEATBaseTransformer3_2d(FEATBaseTransformer3):
 
         # get topk base instances
  
-        if self.fast_query is None:
-            # with torch.no_grad():
-            base_protos = self.get_base_protos(proto, ids) # 
-        else:
-            base_protos = self.get_base_protos_fast_query(ids[:5])
+        # if self.fast_query is None:
+        #     # with torch.no_grad():
+        #     base_protos = self.get_base_protos(proto, ids) # 
+        # else:
+        #     base_protos = self.get_base_protos_fast_query(ids[:5])
         
         # print('base_protos', base_protos.shape)
             # base_protos = self.get_base_protos_fast_query_ti_temp(ids[:5])

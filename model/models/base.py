@@ -56,7 +56,9 @@ class FewShotModel(nn.Module):
         # classes of task in quene
         self.classes = np.ones((self.K, 5), dtype=int)*1000
 
-        self.memory = nn.Parameter(torch.randn(64, 1600))
+        pre_prototypes = torch.load('class_prototypes.pt')
+
+        self.memory = nn.Parameter(pre_prototypes)
         self.memory_target = nn.Parameter(torch.randn(64, 1600))
 
         self.proj_head = ProjectionHead()

@@ -242,9 +242,7 @@ class FSLTrainer(Trainer):
             self.try_evaluate(epoch)
             self.save_model('epoch-last')
             if self.train_epoch%40 == 0:
-                self.evaluate_test('epoch-last.pth')
-
-
+                self.evaluate_test('epoch-last.pth', specified_epoch=self.train_epoch)
 
             print('ETA:{}/{}'.format(
                     self.timer.measure(),
@@ -332,7 +330,7 @@ class FSLTrainer(Trainer):
             osp.join(self.args.save_path, name + '.pth')
         )
 
-    def evaluate_test(self, path):
+    def evaluate_test(self, path, specified_epoch=None):
         # restore model args
         args = self.args
         # evaluation mode
@@ -414,6 +412,8 @@ class FSLTrainer(Trainer):
             self.trlog['final_test_acc_interval'] = vap
             self.trlog['final_test_loss'] = vl
             epoch = self.args.max_epoch
+            if specified_epoch:
+                epoch = specified_epoch
             print('Epoch{} val acc={:.4f} + {:.4f}\n'.format(
                     epoch,
                     self.trlog['final_val_acc'],
