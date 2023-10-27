@@ -56,7 +56,7 @@ class FewShotModel(nn.Module):
         # classes of task in quene
         self.classes = np.ones((self.K, 5), dtype=int)*1000
 
-        if args.method == 'MBT':
+        if args.method == 'MBT' or args.method == 'KVMBT':
             self.memory = nn.Parameter(torch.randn(64, 1600))
         elif args.method == 'PMBT':
             pre_prototypes = torch.load('class_prototypes.pt')
@@ -161,6 +161,17 @@ class FewShotModel(nn.Module):
                                         , simclr_embs=simclr_embs, return_intermediate=False
                                         , instance_embs_target=instance_embs_target)
                     return logits, kvmpred, kvmtarget
+                else:
+                    logits = self._forward(instance_embs, support_idx, query_idx, key_cls=key_cls, ids=ids
+                                        , simclr_embs=simclr_embs, return_intermediate=False
+                                        , instance_embs_target=instance_embs_target)
+                    return logits
+            if self.args.method == 'KVMBT':
+                if self.training:
+                    logits, logits_kvm, metrics, sims, pure_index = self._forward(instance_embs, support_idx, query_idx, key_cls=key_cls, ids=ids
+                                        , simclr_embs=simclr_embs, return_intermediate=False
+                                        , instance_embs_target=instance_embs_target)
+                    return logits, logits_kvm, metrics, sims, pure_index
                 else:
                     logits = self._forward(instance_embs, support_idx, query_idx, key_cls=key_cls, ids=ids
                                         , simclr_embs=simclr_embs, return_intermediate=False

@@ -169,6 +169,20 @@ class FSLTrainer(Trainer):
                     # print('Lmempred:', Lmempred)
                     # total_loss = Lmempred + loss_meta*30
                     total_loss = loss_meta
+                elif self.args.method == 'KVMBT':
+                    logits, logits_kvm, metrics, sims, pure_index = self.model(data, ids, key_cls=gt_label[:5])
+                    sims = torch.tensor(sims).cuda()
+                    pure_index = torch.tensor(pure_index).cuda()
+                    pos_index = []
+                    for j in range(len(sims)):
+                        if sims[j] >= 0.8:
+                            pos_index.append(j)
+                    pos_index = torch.tensor(pos_index).cuda()
+                    label_moco = torch.tensor(0).type(torch.cuda.LongTensor)
+                    loss_infoNCE_neg = F.cross_entropy(torch.index_select(metrics, 0, pure_index).unsqueeze(0), label_moco.unsqueeze(0))
+                    loss_meta = F.cross_entropy(logits, label)
+                    loss_kvm = F.cross_entropy(logits_kvm, label[:5])
+                    total_loss = loss_meta + loss_infoNCE_neg + loss_kvm
                 else:
                     logits, reg_logits, metrics, sims, pure_index = self.model(data, ids, key_cls=gt_label[:5])
 

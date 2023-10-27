@@ -33,7 +33,8 @@ if __name__ == '__main__':
 
     # args.method = 'proto_net_only'
     # args.method = 'proto_FGKVM'
-    args.method = 'MBT'
+    args.method = 'KVMBT'
+    # args.method = 'MBT'
     # args.method = 'PMBT'
 
     trainer = FSLTrainer(args)
