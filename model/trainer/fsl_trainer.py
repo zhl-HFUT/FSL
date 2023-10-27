@@ -265,7 +265,7 @@ class FSLTrainer(Trainer):
         label = label.type(torch.LongTensor)
         if torch.cuda.is_available():
             label = label.cuda()
-        print('best epoch {}, best val acc={:.4f} + {:.4f}'.format(
+        print('best epoch {}, best test600 acc={:.4f} + {:.4f}'.format(
                 self.trlog['max_acc_epoch'],
                 self.trlog['max_acc'],
                 self.trlog['max_acc_interval']))
@@ -274,6 +274,8 @@ class FSLTrainer(Trainer):
 
         with torch.no_grad():
             for i, batch in enumerate(data_loader, 1):
+                if i == 600:
+                    break
                 if torch.cuda.is_available():
                     if self.pass_ids:
                         data, gt_label, ids = batch[0].cuda(), batch[1].cuda(), batch[2]
@@ -339,9 +341,9 @@ class FSLTrainer(Trainer):
         else:
             path = osp.join(self.args.save_path, path)
         params = torch.load(path)['params']
-        del params['queue_ptr']
-        del params['queue']
-        print('deleted')
+        # del params['queue_ptr']
+        # del params['queue']
+        # print('deleted')
         self.model.load_state_dict(params, strict=False)
         self.model.eval()
         record = np.zeros((10000, 2)) # loss and acc
@@ -403,7 +405,7 @@ class FSLTrainer(Trainer):
             self.trlog['test_acc_interval'] = vap
             self.trlog['test_loss'] = vl
             epoch = self.trlog['max_acc_epoch']
-            print('Epoch{} val acc={:.4f} + {:.4f}\n'.format(
+            print('Epoch{} test600 acc={:.4f} + {:.4f}\n'.format(
                     epoch,
                     self.trlog['max_acc'],
                     self.trlog['max_acc_interval']))
@@ -414,7 +416,7 @@ class FSLTrainer(Trainer):
             epoch = self.args.max_epoch
             if specified_epoch:
                 epoch = specified_epoch
-            print('Epoch{} val acc={:.4f} + {:.4f}\n'.format(
+            print('Epoch{} test600 acc={:.4f} + {:.4f}\n'.format(
                     epoch,
                     self.trlog['final_val_acc'],
                     self.trlog['final_val_acc_interval']))
@@ -423,7 +425,7 @@ class FSLTrainer(Trainer):
         #         self.trlog['max_acc_epoch'],
         #         self.trlog['max_acc'],
         #         self.trlog['max_acc_interval']))
-        print('Epoch{} Test acc={:.4f} + {:.4f}\n'.format(
+        print('Epoch{} Test10000 acc={:.4f} + {:.4f}\n'.format(
                 epoch,
                 va,
                 vap))

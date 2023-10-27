@@ -66,10 +66,10 @@ class Trainer(object, metaclass=abc.ABCMeta):
     def try_evaluate(self, epoch):
         args = self.args
         if self.train_epoch % args.eval_interval == 0:
-            vl, va, vap = self.evaluate(self.val_loader)
+            vl, va, vap = self.evaluate(self.test_loader)
             self.logger.add_scalar('val_loss', float(vl), self.train_step)
             self.logger.add_scalar('val_acc', float(va),  self.train_step)
-            print('epoch {}, val, loss={:.4f} acc={:.4f}+{:.4f}'.format(epoch, vl, va, vap))
+            print('epoch {}, test600, loss={:.4f} acc={:.4f}+{:.4f}'.format(epoch, vl, va, vap))
 
             if va >= self.trlog['max_acc']:
                 self.trlog['max_acc'] = va
