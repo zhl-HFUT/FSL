@@ -7,7 +7,7 @@ import os
 import os.path as osp
 import torch.nn as nn
 from tqdm import tqdm
-
+import random
 
 
 def apply_z_norm(features):                                                                                                                                                    
@@ -269,7 +269,7 @@ class FEATBaseTransformer3_2d(FEATBaseTransformer3):
         n_batch = proto.shape[0]
         k = self.args.k
 
-        if self.training:
+        if self.training and self.args.method == 'PMBT':
             for i, cls in enumerate(key_cls):
                 # print(cls)
                 self.memory.data[cls] = (1 - 0.99) * self.memory.data[cls] + 0.99 * instance_embs.view(80, 1600)[i::5].mean(dim=0)
@@ -287,6 +287,7 @@ class FEATBaseTransformer3_2d(FEATBaseTransformer3):
         # self.save_as_numpy(base_protos, 'base_protos')
         # print('get memory prototypes')
         # print(ids)
+        self.wordnet_sim_labels['n0461250400'][4] = random.choice([21, 49, 52, 40])
         top_indices = np.stack([self.wordnet_sim_labels[id_[:11]] for id_ in ids[:5]], axis=0)
         base_protos = self.memory[torch.Tensor(top_indices).long()].reshape(5, 5, 64, 5, 5)
         # print('base_protos', base_protos.shape)
