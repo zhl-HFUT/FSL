@@ -57,7 +57,7 @@ class FewShotModel(nn.Module):
         self.classes = np.ones((self.K, 5), dtype=int)*1000
 
         if args.method == 'MBT':
-            self.memory = nn.Parameter(torch.randn(64, 1600))
+            self.memory = nn.Parameter(torch.randn(128, 1600))
         elif args.method == 'PMBT':
             pre_prototypes = torch.load('class_prototypes.pt')
             self.memory = nn.Parameter(pre_prototypes)
