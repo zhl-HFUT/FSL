@@ -46,7 +46,7 @@ class FewShotModel(nn.Module):
         super().__init__()
         self.args = args
 
-        self.lstm = BidirectionalLSTM(layer_sizes=[256], batch_size=1, vector_dim = 1600)
+        self.lstm = BidirectionalLSTM(layer_sizes=[256], batch_size=1, vector_dim = 16000)
         self.K = 256
         self.m = 0.99
         self.T = 0.07
@@ -57,12 +57,12 @@ class FewShotModel(nn.Module):
         self.classes = np.ones((self.K, 5), dtype=int)*1000
 
         if args.method == 'MBT':
-            self.memory = nn.Parameter(torch.randn(128, 1600))
+            self.memory = nn.Parameter(torch.randn(128, 16000))
         elif args.method == 'PMBT':
             pre_prototypes = torch.load('class_prototypes.pt')
             self.memory = nn.Parameter(pre_prototypes)
         # self.memory = nn.Parameter(torch.randn(64, 1600))
-        self.memory_target = nn.Parameter(torch.randn(64, 1600))
+        self.memory_target = nn.Parameter(torch.randn(64, 16000))
 
         self.proj_head = ProjectionHead()
         self.proj_head_target = ProjectionHead()
@@ -72,6 +72,13 @@ class FewShotModel(nn.Module):
             self.encoder = ConvNet(resize=resize, sal=sal, max_pool=max_pool)
             self.encoder_target = ConvNet(resize=resize, sal=sal, max_pool=max_pool)
             hdim = 64
+        elif args.backbone_class == 'Res12':
+            hdim = args.dim_model
+            from model.networks.res12 import ResNet
+            self.encoder = ResNet(avg_pool=args.max_pool, resize=args.resize, 
+                drop_rate=args.drop_rate, out_dim=hdim)
+            self.encoder_target = ResNet(avg_pool=args.max_pool, resize=args.resize, 
+                drop_rate=args.drop_rate, out_dim=hdim)
         else:
             raise ValueError('')
         self.sal_crop = args.sal_crop

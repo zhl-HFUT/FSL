@@ -232,6 +232,8 @@ class FEATBaseTransformer2(FewShotModel):
         super().__init__(args, max_pool=max_pool, resize = resize)
         if args.backbone_class == 'ConvNet':
             hdim = 64
+        elif args.backbone_class == 'Res12':
+            hdim = args.dim_model
         else:
             raise ValueError('')
         
