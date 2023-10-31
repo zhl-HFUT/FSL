@@ -241,7 +241,7 @@ class FSLTrainer(Trainer):
             # print(tca.item())
             self.try_evaluate(epoch)
             self.save_model('epoch-last')
-            if self.train_epoch>= 10:
+            if self.train_epoch%20 == 0:
                 self.evaluate_test('epoch-last.pth', specified_epoch=self.train_epoch)
 
             print('ETA:{}/{}'.format(
