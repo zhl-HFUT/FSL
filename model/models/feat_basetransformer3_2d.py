@@ -290,20 +290,20 @@ class FEATBaseTransformer3_2d(FEATBaseTransformer3):
         # print(ids)
         if self.training:
             self.wordnet_sim_labels['n0461250400'][4] = random.choice([21, 49, 52, 40])
-            top_indices = np.stack([np.concatenate([self.wordnet_sim_labels[id_[:11]], [i+64 for i in self.wordnet_sim_labels[id_[:11]]]]) for id_ in ids[:5]], axis=0)
-            base_protos = self.memory[torch.Tensor(top_indices).long()].reshape(5, 10, 640, 5, 5)
+            top_indices = np.stack([self.wordnet_sim_labels[id_[:11]] for id_ in ids[:5]], axis=0)
+            base_protos = self.memory[torch.Tensor(top_indices).long()].reshape(5, 5, 640, 5, 5)
         else:
             # top_indices = np.stack([[i for i in range(128)] for id_ in ids[:5]], axis=0)
             # base_protos = self.memory[torch.Tensor(top_indices).long()].reshape(5, 128, 64, 5, 5)
-            top_indices = np.stack([np.concatenate([self.wordnet_sim_labels[id_[:11]], [i+64 for i in self.wordnet_sim_labels[id_[:11]]]]) for id_ in ids[:5]], axis=0)
-            base_protos = self.memory[torch.Tensor(top_indices).long()].reshape(5, 10, 640, 5, 5)
+            top_indices = np.stack([self.wordnet_sim_labels[id_[:11]] for id_ in ids[:5]], axis=0)
+            base_protos = self.memory[torch.Tensor(top_indices).long()].reshape(5, 5, 640, 5, 5)
         # print('base_protos', base_protos.shape)
         
         # return base_protos
         # base_protos n_class * topk * 64 * (5 * 5)
         # print('base_protos', base_protos.shape)
         # print(n_class, k, emb_dim, spatial_dim, spatial_dim)
-        k = 10
+        k = 5
 
         if self.baseinstance_2d_norm:
             base_protos = base_protos.reshape(n_class*k, emb_dim, spatial_dim, spatial_dim)
