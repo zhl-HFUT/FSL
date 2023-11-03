@@ -46,7 +46,7 @@ class FewShotModel(nn.Module):
         super().__init__()
         self.args = args
 
-        self.lstm = BidirectionalLSTM(layer_sizes=[256], batch_size=1, vector_dim = 16000)
+        self.lstm = BidirectionalLSTM(layer_sizes=[256], batch_size=1, vector_dim = 640)
         self.K = 256
         self.m = 0.99
         self.T = 0.07
@@ -57,12 +57,12 @@ class FewShotModel(nn.Module):
         self.classes = np.ones((self.K, 5), dtype=int)*1000
 
         if args.method == 'MBT':
-            self.memory = nn.Parameter(torch.randn(64, 16000))
+            self.memory = nn.Parameter(torch.randn(64, 640))
         elif args.method == 'PMBT':
             pre_prototypes = torch.load('class_prototypes.pt')
             self.memory = nn.Parameter(pre_prototypes)
         # self.memory = nn.Parameter(torch.randn(64, 1600))
-        self.memory_target = nn.Parameter(torch.randn(64, 16000))
+        self.memory_target = nn.Parameter(torch.randn(64, 640))
 
         self.proj_head = ProjectionHead()
         self.proj_head_target = ProjectionHead()

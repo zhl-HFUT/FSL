@@ -291,12 +291,12 @@ class FEATBaseTransformer3_2d(FEATBaseTransformer3):
         if self.training:
             self.wordnet_sim_labels['n0461250400'][4] = random.choice([21, 49, 52, 40])
             top_indices = np.stack([self.wordnet_sim_labels[id_[:11]] for id_ in ids[:5]], axis=0)
-            base_protos = self.memory[torch.Tensor(top_indices).long()].reshape(5, 5, 640, 5, 5)
+            base_protos = self.memory[torch.Tensor(top_indices).long()].reshape(5, 5, 640)
         else:
             # top_indices = np.stack([[i for i in range(128)] for id_ in ids[:5]], axis=0)
             # base_protos = self.memory[torch.Tensor(top_indices).long()].reshape(5, 128, 64, 5, 5)
             top_indices = np.stack([self.wordnet_sim_labels[id_[:11]] for id_ in ids[:5]], axis=0)
-            base_protos = self.memory[torch.Tensor(top_indices).long()].reshape(5, 5, 640, 5, 5)
+            base_protos = self.memory[torch.Tensor(top_indices).long()].reshape(5, 5, 640)
         # print('base_protos', base_protos.shape)
         
         # return base_protos
@@ -305,10 +305,10 @@ class FEATBaseTransformer3_2d(FEATBaseTransformer3):
         # print(n_class, k, emb_dim, spatial_dim, spatial_dim)
         k = 5
 
-        if self.baseinstance_2d_norm:
-            base_protos = base_protos.reshape(n_class*k, emb_dim, spatial_dim, spatial_dim)
-            base_protos = self.baseinstance_2d_norm(base_protos)
-            base_protos = base_protos.reshape(n_class, k, emb_dim, spatial_dim, spatial_dim)
+        # if self.baseinstance_2d_norm:
+        #     base_protos = base_protos.reshape(n_class*k, emb_dim, spatial_dim, spatial_dim)
+        #     base_protos = self.baseinstance_2d_norm(base_protos)
+        #     base_protos = base_protos.reshape(n_class, k, emb_dim, spatial_dim, spatial_dim)
 
 
         if self.channel_reduction:
@@ -321,23 +321,26 @@ class FEATBaseTransformer3_2d(FEATBaseTransformer3):
 
         if self.args.z_norm=='before_tx' or self.args.z_norm=='both':                                                                                                          
                                                                                                                                                                                
-            b1, b2, b3, b4, _ = base_protos.shape                                                                                                                              
-            p1, p2, p3, p4, _ = proto.shape                                                                                                                                    
-            base_protos = base_protos.reshape(b1*b2, b3*b4*b4)                                                                                                                 
-            proto = proto.reshape(p1*p2, p3*p4*p4)                                                                                                                             
-                                                                                                                          
+            # b1, b2, b3, b4, _ = base_protos.shape                                                                                                                              
+            # p1, p2, p3, p4, _ = proto.shape                                                                                                                                    
+            # base_protos = base_protos.reshape(b1*b2, b3*b4*b4)                                                                                                                 
+            # proto = proto.reshape(p1*p2, p3*p4*p4)                                                                                                                             
+
+            base_protos = base_protos.reshape(25, 640)                                                                                                              
+            proto = proto.reshape(5, 640)
             base_protos, proto = apply_z_norm(base_protos), apply_z_norm(proto)                                                                                                
-            base_protos = base_protos.reshape(b1,b2,b3,b4,b4)                                                                                                                  
-            proto = proto.reshape(p1,p2,p3,p4,p4)   
-            origin_proto = proto.view(5, 1, 16000)                                                                                                                           
+            # base_protos = base_protos.reshape(b1,b2,b3,b4,b4)                                                                                                                  
+            # proto = proto.reshape(p1,p2,p3,p4,p4)   
+            origin_proto = proto.view(5, 1, 640)                                                                                                                           
 
 
 
-        proto = proto.reshape(proto.shape[1], emb_dim, -1).permute(0, 2, 1).contiguous()
+        # proto = proto.reshape(proto.shape[1], emb_dim, -1).permute(0, 2, 1).contiguous()
+        proto = proto.reshape(5, 640, 1).permute(0, 2, 1).contiguous()
         self.save_as_numpy(proto, 'proto_after_reshape')
 
-        base_protos = base_protos.permute(0, 2, 1, 3, 4).contiguous()
-        combined_protos = base_protos.reshape(n_class*n_batch, emb_dim, -1).permute(0, 2, 1).contiguous()
+        # base_protos = base_protos.permute(0, 2, 1, 3, 4).contiguous()
+        combined_protos = base_protos.reshape(5, 640, 5).permute(0, 2, 1).contiguous()
         self.save_as_numpy(combined_protos, 'combined_protos')
 
         if self.args.method == 'proto_FGKVM':
@@ -510,7 +513,7 @@ class FEATBaseTransformer3_2d(FEATBaseTransformer3):
             feat_task_1 = hn.mean(dim = 0)
             feat_task_1 = nn.functional.normalize(feat_task_1, dim=1) # (1, 256)
 
-            output, hn, cn = self.lstm(proto.view(5, 1, 16000))
+            output, hn, cn = self.lstm(proto.view(5, 1, 640))
             feat_task_2 = hn.mean(dim = 0)
             feat_task_2 = nn.functional.normalize(feat_task_2, dim=1) # (1, 256)
 
