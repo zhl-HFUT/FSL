@@ -82,14 +82,14 @@ class FEATBaseTransformer3_2d(FEATBaseTransformer3):
             data = json.load(file)
         self.wordnet_sim_labels = data
          
-        if args.embeds_cache_2d is not None:
-            print('loading 2d embeds_cache from args ', args.embeds_cache_2d)
-            proto_dict_2d = torch.load(args.embeds_cache_2d)
-        else:
-           raise ValueError('Provide embeds_cache_2d argument')
+        # if args.embeds_cache_2d is not None:
+        #     print('loading 2d embeds_cache from args ', args.embeds_cache_2d)
+        #     proto_dict_2d = torch.load(args.embeds_cache_2d)
+        # else:
+        #    raise ValueError('Provide embeds_cache_2d argument')
 
-        self.proto_dict_2d = proto_dict_2d
-        self.all_proto_2d = proto_dict_2d['embeds'].cuda()
+        # self.proto_dict_2d = proto_dict_2d
+        # self.all_proto_2d = proto_dict_2d['embeds'].cuda()
 
         if self.args.mixed_precision is not None and self.args.mixed_precision!='O0':
             print('halving the embeds_cache 2d')

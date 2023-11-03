@@ -244,29 +244,29 @@ class FEATBaseTransformer2(FewShotModel):
         print('Creating slf_attn with hdim, tx_k_v = ', [hdim, tx_k_v])
         self.slf_attn = MultiHeadAttention(args.n_heads, hdim, tx_k_v, tx_k_v, dropout=0.5)
         self.self_attn2 = MultiHeadAttention(1, hdim, hdim, hdim, dropout=0.5)
-        proto_dict = None
-        self.fast_query = args.fast_query
-        if args.base_protos==0:
+        # proto_dict = None
+        # self.fast_query = args.fast_query
+        # if args.base_protos==0:
             
-            # using base instances
-            print('using base instances')
-            print('backbone_class ', [args.backbone_class, args.backbone_class=='Res12_ptcv', args.dataset])
-            if self.fast_query is None:
-                if args.embeds_cache_1d is not None:
-                    print('loading 1d embeds_cache from args ', args.embeds_cache_1d)
-                    proto_dict = torch.load(args.embeds_cache_1d)
+        #     # using base instances
+        #     print('using base instances')
+        #     print('backbone_class ', [args.backbone_class, args.backbone_class=='Res12_ptcv', args.dataset])
+        #     if self.fast_query is None:
+        #         if args.embeds_cache_1d is not None:
+        #             print('loading 1d embeds_cache from args ', args.embeds_cache_1d)
+        #             proto_dict = torch.load(args.embeds_cache_1d)
    
-                self.all_proto = proto_dict['embeds'].cuda() 
-                if self.args.mixed_precision is not None and self.args.mixed_precision!='O0':
-                    print('halving the embeds_cache 1d')
-                    self.all_proto = self.all_proto.half()
-                self.proto_dict = proto_dict
-                self.all_classes = self.ids2classes(np.array(proto_dict['ids']))
-        if self.fast_query is not None:
-            print('Loading fast query_dict ', self.fast_query)
-            print('path is ', self.fast_query)
-            self.query_dict = torch.load(self.fast_query)
-            # self.all_base_ids = np.array(list(self.query_dict.keys()))[:38400]
+        #         self.all_proto = proto_dict['embeds'].cuda() 
+        #         if self.args.mixed_precision is not None and self.args.mixed_precision!='O0':
+        #             print('halving the embeds_cache 1d')
+        #             self.all_proto = self.all_proto.half()
+        #         self.proto_dict = proto_dict
+        #         self.all_classes = self.ids2classes(np.array(proto_dict['ids']))
+        # if self.fast_query is not None:
+        #     print('Loading fast query_dict ', self.fast_query)
+        #     print('path is ', self.fast_query)
+        #     self.query_dict = torch.load(self.fast_query)
+        #     # self.all_base_ids = np.array(list(self.query_dict.keys()))[:38400]
         self.after_attn = None
         self.feat_attn = args.feat_attn
         self.top_k = None
