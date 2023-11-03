@@ -91,9 +91,9 @@ class FEATBaseTransformer3_2d(FEATBaseTransformer3):
         # self.proto_dict_2d = proto_dict_2d
         # self.all_proto_2d = proto_dict_2d['embeds'].cuda()
 
-        if self.args.mixed_precision is not None and self.args.mixed_precision!='O0':
-            print('halving the embeds_cache 2d')
-            self.all_proto_2d = self.all_proto_2d.half()        
+        # if self.args.mixed_precision is not None and self.args.mixed_precision!='O0':
+        #     print('halving the embeds_cache 2d')
+        #     self.all_proto_2d = self.all_proto_2d.half()        
         if args.embed_pool == 'max_pool':
             self.embed_pool = F.max_pool2d
         elif args.embed_pool == 'avg_pool':

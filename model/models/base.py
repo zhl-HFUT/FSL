@@ -21,8 +21,8 @@ class BidirectionalLSTM(nn.Module):
                             bidirectional=True)
 
     def forward(self, inputs):
-        c0 = torch.rand(self.lstm.num_layers*2, self.batch_size, self.lstm.hidden_size, requires_grad=False).cuda()#.half()
-        h0 = torch.rand(self.lstm.num_layers*2, self.batch_size, self.lstm.hidden_size, requires_grad=False).cuda()#.half()
+        c0 = torch.rand(self.lstm.num_layers*2, self.batch_size, self.lstm.hidden_size, requires_grad=False).cuda().half()
+        h0 = torch.rand(self.lstm.num_layers*2, self.batch_size, self.lstm.hidden_size, requires_grad=False).cuda().half()
         output, (hn, cn) = self.lstm(inputs, (h0, c0))
         return output, hn, cn
     
