@@ -8,10 +8,6 @@ if [ -e "$NETWORK_CONFIG_FILE" ]; then
     echo "Network configuration file found at $NETWORK_CONFIG_FILE"
     # 在这里添加处理网络配置文件的命令
     sh /etc/network_turbo
-    echo $ALL_PROXY
-    echo $all_proxy
-    echo $https_proxy
-    echo $http_proxy
 else
     echo "Setting proxy"
     export https_proxy="http://${hostip}:${http_hostport}"
