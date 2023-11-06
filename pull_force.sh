@@ -7,7 +7,7 @@ NETWORK_CONFIG_FILE="/etc/network_turbo"
 if [ -e "$NETWORK_CONFIG_FILE" ]; then
     echo "Network configuration file found at $NETWORK_CONFIG_FILE"
     # 在这里添加处理网络配置文件的命令
-    sh /etc/network_tuobo
+    sh /etc/network_turbo
     echo $ALL_PROXY
     echo $all_proxy
     echo $https_proxy
