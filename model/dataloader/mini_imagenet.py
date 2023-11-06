@@ -10,6 +10,7 @@ import os
 import pandas as pd
 import sys
 sys.path.append('./SimCLR')
+from .simclr_view_generator import ContrastiveLearningViewGenerator
 
 # from data_aug.view_generator import ContrastiveLearningViewGenerator
 # from data_aug.contrastive_learning_dataset import ContrastiveLearningDataset
@@ -134,9 +135,15 @@ class MiniImageNet(Dataset):
                   transforms.CenterCrop(image_size), self.norm]
             if self.use_im_cache: 
                 self.init_transform = transforms.Compose([transforms.ToTensor()])
+                self.simclr_transform = ContrastiveLearningViewGenerator(
+                    get_simclr_pipeline_transform(im_size,
+                    extra_transforms=extra_transforms), n_views=self.return_simclr)
             else:
                 self.init_transform = transforms.Compose([transforms.Resize(128),
                     transforms.ToTensor()])
+                self.simclr_transform = ContrastiveLearningViewGenerator(
+                    get_simclr_pipeline_transform(128,
+                    extra_transforms=extra_transforms), n_views=self.return_simclr)
 
     def parse_csv(self, csv_path, setname):
         lines = [x.strip() for x in open(csv_path, 'r').readlines()][1:]

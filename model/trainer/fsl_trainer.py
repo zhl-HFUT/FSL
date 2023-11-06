@@ -144,7 +144,11 @@ class FSLTrainer(Trainer):
 
                 self.train_step += 1
 
-                data, gt_label, ids = batch[0].cuda(), batch[1].cuda(), batch[2]
+                # data, gt_label, ids = batch[0].cuda(), batch[1].cuda(), batch[2]
+                if self.return_simclr:
+                    data, gt_label, ids, data_simclr = batch[0].cuda(), batch[1].cuda(), batch[2], batch[3].cuda()
+                else:
+                    data, gt_label, ids = batch[0].cuda(), batch[1].cuda(), batch[2]
                 
                 data_tm = time.time()
                 self.dt.add(data_tm - start_tm)
@@ -170,7 +174,7 @@ class FSLTrainer(Trainer):
                     # total_loss = Lmempred + loss_meta*30
                     total_loss = loss_meta
                 else:
-                    logits, reg_logits, metrics, sims, pure_index = self.model(data, ids, key_cls=gt_label[:5])
+                    logits, logits_simclr, metrics, sims, pure_index = self.model(data, ids, simclr_images=data_simclr, key_cls=gt_label[:5])
 
                     sims = torch.tensor(sims).cuda()
                     pure_index = torch.tensor(pure_index).cuda()
@@ -191,7 +195,11 @@ class FSLTrainer(Trainer):
                     # loss = self.loss(logits, label)
                     # total_loss = self.loss(logits, label)
                     loss_meta = F.cross_entropy(logits, label)
-                    total_loss = loss_meta + loss_infoNCE_neg
+
+                    aux_loss = F.cross_entropy(logits_simclr, self.model.label_aux)
+                    # print(aux_loss)
+
+                    total_loss = loss_meta + loss_infoNCE_neg + args.balance * aux_loss
                 
                 tl2.add(loss_meta)
                 forward_tm = time.time()

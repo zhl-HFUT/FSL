@@ -75,9 +75,9 @@ class FewShotModel(nn.Module):
         elif args.backbone_class == 'Res12':
             hdim = args.dim_model
             from model.networks.res12 import ResNet
-            self.encoder = ResNet(avg_pool=args.max_pool, resize=args.resize, 
+            self.encoder = ResNet(avg_pool=True, resize=args.resize, 
                 drop_rate=args.drop_rate, out_dim=hdim)
-            self.encoder_target = ResNet(avg_pool=args.max_pool, resize=args.resize, 
+            self.encoder_target = ResNet(avg_pool=True, resize=args.resize, 
                 drop_rate=args.drop_rate, out_dim=hdim)
         else:
             raise ValueError('')
@@ -147,7 +147,7 @@ class FewShotModel(nn.Module):
             if simclr_images is not None:
                 n_embs, n_views, n_ch, spatial, _ = simclr_images.shape
                 simclr_images = simclr_images.reshape(-1, n_ch, spatial, spatial)
-                simclr_embs = self.encoder(simclr_images)
+                simclr_embs = self.encoder(simclr_images, pool=False)
                 spatial_out = simclr_embs.shape[-1]
                 # print('simclr embs ', [simclr_embs.shape, simclr_embs.min(), simclr_embs.max()])
 
@@ -176,13 +176,13 @@ class FewShotModel(nn.Module):
 
             if self.training:
                 if self.args.pass_ids:
-                    logits, logits_reg, metrics, sims, pure_index = self._forward(instance_embs, 
+                    logits, logits_simclr, metrics, sims, pure_index = self._forward(instance_embs, 
                         support_idx, query_idx, key_cls=key_cls, ids=ids, simclr_embs=simclr_embs, return_intermediate=False)
 
                 else:
                     logits, logits_reg = self._forward(instance_embs, 
                         support_idx, query_idx, simclr_embs=simclr_embs)
-                return logits, logits_reg, metrics, sims, pure_index
+                return logits, logits_simclr, metrics, sims, pure_index
             else:
                 if self.args.pass_ids:
                     logits = self._forward(instance_embs, support_idx, query_idx, ids)

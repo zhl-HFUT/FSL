@@ -123,6 +123,8 @@ class FEATBaseTransformer3_2d(FEATBaseTransformer3):
             self.channel_reduction = None
 
     def get_simclr_logits(self, simclr_features, temperature_simclr, fc_simclr=None, max_pool=False, version=None):
+
+        # print('simclr_features ', simclr_features.shape)
         
         n_batch, n_views, n_c, spatial, _ = simclr_features.shape
 
@@ -343,103 +345,6 @@ class FEATBaseTransformer3_2d(FEATBaseTransformer3):
         combined_protos = base_protos.reshape(5, 640, 5).permute(0, 2, 1).contiguous()
         self.save_as_numpy(combined_protos, 'combined_protos')
 
-        if self.args.method == 'proto_FGKVM':
-            proto = proto.permute(0, 2, 1).contiguous()
-            proto = proto.view(-1, emb_dim, spatial_dim, spatial_dim)
-            query = query.view(-1, emb_dim, spatial_dim, spatial_dim)
-            if isinstance(self.embed_pool, torch.nn.Identity):
-                proto = proto.reshape(proto.shape[0], -1).unsqueeze(0)
-                query = query.reshape(query.shape[0], -1)
-                emb_dim = emb_dim*(spatial_dim**2)
-            else:
-                proto = self.embed_pool(proto, kernel_size=5).squeeze().unsqueeze(0)
-                query = self.embed_pool(query, kernel_size=5).squeeze()
-            num_batch = proto.shape[0]
-            num_proto = proto.shape[1]
-            num_query = np.prod(query_idx.shape[-2:])
-            # print('proto_FGKVM')
-            # print('proto shape', proto.shape)
-            # print('query shape', query.shape)
-            # print('support_target shape', support_target.shape)
-            # return proto.squeeze(0), query, support_target
-            # for t1, t2 in zip(proto.squeeze(0), proto.squeeze(0)):
-            #     print(t1, t2)
-            #     print('same cos sim:', torch.nn.functional.cosine_similarity(t1, t2, dim=0))
-            # for t1, t2 in zip(support_target, proto.squeeze(0)):
-            #     print(t1, t2)
-            #     print('two encoder cos sim:', torch.nn.functional.cosine_similarity(t1, t2, dim=0))
-            # for t1, t2 in zip(query[5:10], proto.squeeze(0)):
-            #     print(t1, t2)
-            #     print('one encoder cos sim:', torch.nn.functional.cosine_similarity(t1, t2, dim=0))
-            
-            proj_support = self.proj_head(proto.squeeze(0))
-            # print('proj_support:', proj_support.shape)
-            # if self.training:
-            kvmtarget = self.proj_head_target(instance_embs_target.contiguous().view(-1, 1600))
-            proj_query = self.proj_head(query)
-            # print('proj_support_target:', proj_support_target.shape)
-            
-            proj_embs = self.proj_head(instance_embs.contiguous().view(-1, 1600))
-            # 将 tensors 和 memory 转换为适当的形状
-            memory = self.memory.transpose(0, 1).unsqueeze(0)
-            proj_embs = proj_embs.unsqueeze(0)
-
-            # 使用 torch.bmm 计算批量的矩阵乘法
-            sims = torch.bmm(proj_embs, memory)
-
-            # 将 sims 压缩到两个维度
-            sims = sims.squeeze(0)
-
-            # 计算每个向量的范数
-            norms_memory = torch.norm(memory, dim=1)
-            norms_tensors = torch.norm(proj_embs, dim=2)
-
-            # 计算余弦相似度
-            sims = sims / (norms_memory * norms_tensors.transpose(0, 1))
-            # 乘以缩放因子
-            scaling_factor = 16
-            sims = sims * scaling_factor
-
-            # 计算 softmax
-            sims = F.softmax(sims, dim=1)
-            # print('sims:', sims.shape)
-            kvmpred = torch.mm(sims, self.memory_target)
-            # print('proj_support_mempred:', proj_support_mempred.shape)
-
-            # query = query.view(-1, emb_dim).unsqueeze(1) # (Nbatch*Nq*Nw, 1, d)
-            # proto = proto.unsqueeze(1).expand(num_batch, num_query, num_proto, emb_dim).contiguous()
-            # proto = proto.view(num_batch*num_query, num_proto, emb_dim) # (Nbatch x Nq, Nk, d)
-            # proj_query = proj_query.view(-1, 256).unsqueeze(1)
-            # final_support = proj_support_mempred.unsqueeze(0).unsqueeze(1).expand(num_batch, num_query, num_proto, 256).contiguous()
-            # final_support = final_support.view(num_batch*num_query, num_proto, 256)
-            # print(num_batch, num_query, num_proto, emb_dim)
-            # print(proto.shape, query.shape)
-
-            # logits = - torch.mean((proto - query) ** 2, 2) / self.args.temperature
-            # logits = - torch.mean((final_support - proj_query) ** 2, 2) / self.args.temperature
-            # proj_support_mempred = nn.functional.normalize(proj_support_mempred, dim=1)
-            support_mempred = kvmpred[0:5]
-            query_mempred = kvmpred[5:]
-            support_target = kvmtarget[0:5]
-            query_target = kvmtarget[5:]
-            
-            if self.training:
-                
-                # logits = torch.mm(query_mempred, support_mempred.t()) + torch.mm(query_mempred, support_target.t()) + torch.mm(query_target, support_mempred.t()) + torch.mm(proj_query, proj_support.t())
-                # logits = torch.mm(proj_query, proj_support.t())
-                logits = torch.mm(query_mempred, support_mempred.t()) + torch.mm(query_mempred, support_target.t()) + torch.mm(query_target, support_mempred.t())# + torch.mm(proj_query, proj_support.t())
-                
-                return logits, kvmpred, kvmtarget
-            else:
-                # logits = torch.mm(query_mempred, support_mempred.t())
-                # logits = torch.mm(proj_query, proj_support.t())
-                logits = torch.mm(query_mempred, support_mempred.t()) + torch.mm(query_mempred, support_target.t()) + torch.mm(query_target, support_mempred.t())# + torch.mm(proj_query, proj_support.t())
-                
-                return logits
-
-    
-        # query: (num_batch, num_query, num_proto, num_emb)
-        # proto: (num_batch, num_proto, num_emb)
         if self.args.method == 'proto_net_only':
             proto = proto.permute(0, 2, 1).contiguous()
             proto = proto.view(-1, emb_dim, spatial_dim, spatial_dim)
@@ -553,32 +458,14 @@ class FEATBaseTransformer3_2d(FEATBaseTransformer3):
                 # implementing simclr loss on the encoder embeddings
             if  simclr_embs is not None:
 
-                if self.args.simclr_loss_type=='ver1':
-                    sim_k = simclr_embs[:,0,:,:,:]
-                    sim_q = simclr_embs[:,1,:,:,:]
-                    if self.args.backbone_class == 'ConvNet':
-                        sim_k = F.max_pool2d(sim_k, kernel_size=self.spatial_dim)
-                        sim_q = F.max_pool2d(sim_q, kernel_size=self.spatial_dim)
-                    n_simclr_eps = self.args.shot + self.args.query
-                    n_proto = self.args.way
-                    n_q = self.args.way
-                    sim_k = sim_k.reshape(n_simclr_eps, n_proto, -1)
-                    sim_q = sim_q.reshape(n_simclr_eps, n_proto, -1)
-                    sim_clr_emb_dim = sim_q.shape[-1]
-                    
-                    sim_k = sim_k.unsqueeze(1).expand(n_simclr_eps, n_q, n_proto, sim_clr_emb_dim)
-                    sim_q = sim_q.unsqueeze(2)
-
-                    logits_simclr = - torch.mean((sim_k - sim_q) ** 2, 3) / self.args.temperature2
-
-                elif self.args.simclr_loss_type=='ver2.1' or self.args.simclr_loss_type=='ver2.2':
+                if self.args.simclr_loss_type=='ver2.2':
                     fc_simclr = None
 
                     logits_simclr = self.get_simclr_logits(simclr_embs,
                         temperature_simclr=self.args.temperature2,
                         fc_simclr=fc_simclr,
                         version=self.args.simclr_loss_type) 
-                return logits, logits_simclr
+                return logits, logits_simclr, metrics, sims, pure_index
             # 训练时在这里return
             if self.args.balance==0:
 
