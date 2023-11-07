@@ -77,7 +77,7 @@ class FEATBaseTransformer3_2d(FEATBaseTransformer3):
         if args.baseinstance_2d_norm:
             self.baseinstance_2d_norm = nn.BatchNorm2d(self.hdim)
 
-    def get_simclr_logits(self, simclr_features, temperature_simclr, fc_simclr=None, max_pool=False, version=None):
+    def get_simclr_logits(self, simclr_features, temperature_simclr, fc_simclr=None, max_pool=False):
 
         # print('simclr_features ', simclr_features.shape)
         
@@ -241,14 +241,11 @@ class FEATBaseTransformer3_2d(FEATBaseTransformer3):
             # TODO this can be further adapted for basetransformer version
                 # implementing simclr loss on the encoder embeddings
             if  simclr_embs is not None:
+                fc_simclr = None
 
-                if self.args.simclr_loss_type=='ver2.2':
-                    fc_simclr = None
-
-                    logits_simclr = self.get_simclr_logits(simclr_embs,
-                        temperature_simclr=self.args.temperature2,
-                        fc_simclr=fc_simclr,
-                        version=self.args.simclr_loss_type) 
+                logits_simclr = self.get_simclr_logits(simclr_embs,
+                    temperature_simclr=self.args.temperature2,
+                    fc_simclr=fc_simclr) 
                 return logits, logits_simclr, metrics, sims, pure_index
             # 训练时在这里return
             if self.args.balance==0:
@@ -260,10 +257,7 @@ class FEATBaseTransformer3_2d(FEATBaseTransformer3):
             aux_task = aux_task.permute([0, 2, 1, 3])
             aux_task = aux_task.contiguous().view(-1, self.args.shot + self.args.query, emb_dim)
             # apply the transformation over the Aug Task
-            if self.feat_attn==1:
-                aux_emb = self.self_attn2(aux_task, aux_task, aux_task) # T x N x (K+Kq) x d
-            else:
-                aux_emb = self.slf_attn(aux_task, combined_protos, combined_protos)
+            aux_emb = self.slf_attn(aux_task, combined_protos, combined_protos)
             # compute class mean
             aux_emb = aux_emb.view(num_batch, self.args.way, self.args.shot + self.args.query, emb_dim)
             aux_center = torch.mean(aux_emb, 2) # T x N x d

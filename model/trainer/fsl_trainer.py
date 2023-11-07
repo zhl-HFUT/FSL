@@ -38,7 +38,7 @@ class FSLTrainer(Trainer):
 
         self.return_simclr = True if args.return_simclr is not None else False
         self.train_loader, self.val_loader, self.test_loader = get_dataloader(args)
-        self.model, self.para_model = prepare_model(args)
+        self.model = prepare_model(args)
         for param, param_k in zip(self.model.encoder.parameters(), self.model.encoder_target.parameters()):
             param_k.data.copy_(param.data)
             param_k.requires_grad = False
@@ -60,17 +60,8 @@ class FSLTrainer(Trainer):
 
         # prepare one-hot label
         label = torch.arange(args.way, dtype=torch.int16).repeat(args.query)
-        
-        if args.model_class == 'FEATBaseTransformer3_Aux':
-            label_aux = torch.arange(args.way, dtype=torch.int8).repeat(args.k-1)
-        else:
-            if args.label_aux_type is None:
-                label_aux = torch.arange(args.way, dtype=torch.int8).repeat(args.shot + args.query)
-            elif args.label_aux_type == 'random':
-                label_aux = torch.randperm(args.way, dtype=torch.int8).repeat(args.shot + args.query)
 
-            if args.simclr_loss_type=='ver2.1':
-                label_aux = get_label_aux((args.shot+args.query)*(args.way))
+        label_aux = torch.arange(args.way, dtype=torch.int8).repeat(args.shot + args.query)
 
         label = label.type(torch.LongTensor)
         label_aux = label_aux.type(torch.LongTensor)
@@ -81,6 +72,13 @@ class FSLTrainer(Trainer):
             
         return label, label_aux
     
+    
+    def _fix_BN_only(self, model):
+        for module in model.encoder.modules():
+            if isinstance(module, torch.nn.modules.BatchNorm2d):
+                module.eval()
+
+
     def _fix_BN_only(self, model):
         for module in model.encoder.modules():
             if isinstance(module, torch.nn.modules.BatchNorm2d):
@@ -88,47 +86,20 @@ class FSLTrainer(Trainer):
 
     def train(self):
         args = self.args
-        self.model.train()
-        if self.args.fix_BN:
-            self.model.encoder.eval()
-        elif self.args.fix_BN_only:
-            self._fix_BN_only(self.model)
         
-        # start FSL training
         label, label_aux = self.prepare_label()
 
-        # print('before ver2.2 ', label_aux)
-
         print('Using mixed precision with opt level = ', self.mixed_precision)
-        # asd
-
-            
 
         for epoch in range(1, args.max_epoch + 1):
             self.train_epoch += 1
             self.model.train()
-            if self.args.fix_BN:
-                self.model.encoder.eval()
-            elif self.args.fix_BN_only:
-                self._fix_BN_only(self.model)
             
             tl1 = Averager()
             tl2 = Averager()
             ta = Averager()
-            if self.args.dataset == 'MiniImageNet':
-                train_classes = 64
-            elif self.args.dataset == 'CUB':
-                train_classes = 100
-            elif self.args.dataset == 'TieredImageNet' or self.args.dataset == 'TieredImageNet_og':
-                train_classes = 351
-            tca = AccuracyClassAverager(train_classes)
 
             start_tm = time.time()
-
-            if self.args.update_base_interval is not None:
-                if epoch%self.args.update_base_interval==0:
-                    print('running base proto update')
-                    self.model.update_base_protos()
 
             for batch in self.train_loader:
                 self.optimizer.zero_grad()
@@ -210,15 +181,7 @@ class FSLTrainer(Trainer):
                         scaled_loss.backward()
                 else:
                     total_loss.backward()
-                self.model._momentum_update_key_encoder()
-
-
-                # step optimizer
-                # self.optimizer.step()
-
-                # if 'cycl' in self.args.lr_scheduler:
-                #     # print('steppugn inside batch loop')
-                #     self.lr_scheduler.step() 
+                # self.model._momentum_update_key_encoder()
 
                 backward_tm = time.time()
                 self.bt.add(backward_tm - forward_tm)
@@ -232,9 +195,8 @@ class FSLTrainer(Trainer):
                 # refresh start_tm
                 start_tm = time.time()
                 
-            if 'cycl' not in self.args.lr_scheduler:
-                print('stepping outside batch loop')
-                self.lr_scheduler.step()
+
+            self.lr_scheduler.step()
       
             # print('logits range ', [logits.min().item(), logits.max().item()])
             # print('class wise test accuracies ')
@@ -303,10 +265,6 @@ class FSLTrainer(Trainer):
         # print(vca.item())
         # train mode
         self.model.train()
-        if self.args.fix_BN:
-            self.model.encoder.eval()
-        elif self.args.fix_BN_only:
-            self._fix_BN_only(self.model)
 
         return vl, va, vap
 
@@ -429,40 +387,6 @@ class FSLTrainer(Trainer):
                 epoch,
                 va,
                 vap))
-
-        # print('class wise test accuracies ')
-        # print(tca.item())
-        # if args.test:
-        #     pkl_path = osp.dirname(args.test)
-        # else:
-        #     pkl_path = args.save_path
-        
-        # save_dict = tca.item()
-        # save_dict['max_acc_epoch'] = self.trlog['max_acc_epoch']
-        # save_dict['best_val_acc'] = self.trlog['max_acc']
-        # save_dict['test_acc'] = self.trlog['test_acc']
-        # json.dump(save_dict, open(osp.join(pkl_path, 'test_class_acc.json'), 'w'))
-        # print('saved class accuracy json in {}'.format(pkl_path))
-
-        # print('Saving class accuracy json in wandb as a file')
-        # artifact = self.wandb_run.Artifact('test_accuracies', type='test_acc_json')
-        # artifact.add_file(pkl_path)
-        # self.wandb_run.log_artifact(artifact)
-        # try_count = 0
-        # while try_count<10:
-        #     try:
-        #         self.wandb_run.save(osp.join(pkl_path, 'test_class_acc.json'))
-        #         break
-        #     except Exception as ex:
-        #         try_count = try_count + 1
-        #         print([ex, 'Retrying'])
-        #         time.sleep(10)
-            
-        # print('here    ')
-        # print(save_dict)
-        # self.wandb_run.log({"accuracies": wandb.Html(json2html.convert(json = save_dict))})
-        # copyfile(osp.join(pkl_path, 'test_class_acc.json'),
-        #     osp.join(self.wandb_run.dir, 'test_class_acc.json'))
 
         return vl, va, vap
     

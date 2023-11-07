@@ -9,37 +9,6 @@ import os.path as osp
 from model.models import FewShotModel
 
 
-class pca():    
-    def __init__(self, pca_dim, q, whiten=False):
-        self.v = None
-        self.s= None
-        self.pca_dim = pca_dim
-        self.q = q
-        self.whiten = whiten
-        # s- singular values= root of eigen values
-        # to whiten divide by root ofeigen values
-        # therefore divide by s
-    def normalized_pca(self, a):
-    
-        # x has to be n_samples*embedding_dim vector
-        n_samples = a.shape[0]
-#         n_samples=1
-        a_normalized = F.normalize(a, dim=1)
-        if self.v is None:
-            print('Making v')
-            u,s,v = torch.pca_lowrank(a_normalized, self.q)
-            self.v = v
-            self.s = s
-        else:
-            print('Using previous v')
-        a_pca = torch.matmul(a_normalized, self.v[:, :self.pca_dim])
-        if self.whiten:
-            
-            a_pca = np.sqrt(n_samples) * (a_pca / self.s[:self.pca_dim])
-        
-        a_pca_normalized = F.normalize(a_pca, dim=1)
-        return a_pca_normalized
-
 
 def pairwise_distances_logits(query, proto, distance_type='euclid'):
     #  query n * dim
@@ -159,7 +128,7 @@ class ScaledDotProductAttention(nn.Module):
 class MultiHeadAttention(nn.Module):
     ''' Multi-Head Attention module '''
 
-    def __init__(self, n_head, d_model, d_k, d_v, dropout=0.1, debug=False):
+    def __init__(self, n_head, d_model, d_k, d_v, dropout=0.1):
         super().__init__()
         print('Creating transformer with d_k, d_v, d_model = ', [d_k, d_v, d_model])
         self.n_head = n_head
@@ -179,15 +148,6 @@ class MultiHeadAttention(nn.Module):
         self.fc = nn.Linear(n_head * d_v, d_model)
         nn.init.xavier_normal_(self.fc.weight)
         self.dropout = nn.Dropout(dropout)
-        self.debug = debug
-
-    def save_as_numpy(self, tensor, name, debug=False):
-        if self.debug:
-            if isinstance(tensor, torch.Tensor):
-                np_array = tensor.detach().cpu().numpy()
-            else:
-                np_array = tensor
-            np.save(os.path.join('/home/mayug/projects/few_shot/notebooks/temp/', name+'.npy'), np_array)
         
     def forward(self, q, k, v):
         # print('here', [q.shape, k.shape, v.shape])
@@ -211,8 +171,6 @@ class MultiHeadAttention(nn.Module):
         # print('Inside multi head before self.attention ', [q.shape, k.shape, v.shape])
 
         output, attn, log_attn = self.attention(q, k, v)
-        self.save_as_numpy(attn, 'attn')
-        self.save_as_numpy(log_attn, 'log_attn')
         # print('here ', attn.shape)
         # print('log attn ', log_attn.shape)
 
@@ -237,10 +195,8 @@ class FEATBaseTransformer2(FewShotModel):
         else:
             raise ValueError('')
         
-        if args.tx_k_v:
-            tx_k_v = args.tx_k_v
-        else:
-            tx_k_v = hdim
+
+        tx_k_v = hdim
         print('Creating slf_attn with hdim, tx_k_v = ', [hdim, tx_k_v])
         self.slf_attn = MultiHeadAttention(args.n_heads, hdim, tx_k_v, tx_k_v, dropout=0.5)
         # proto_dict = None
@@ -267,41 +223,9 @@ class FEATBaseTransformer2(FewShotModel):
         #     self.query_dict = torch.load(self.fast_query)
         #     # self.all_base_ids = np.array(list(self.query_dict.keys()))[:38400]
         self.after_attn = None
-        self.feat_attn = args.feat_attn
         self.top_k = None
 
-        self.pca_dim = args.pca_dim
-        if self.pca_dim is not None:
-            print('Using PCA dim ', self.pca_dim)
-            self.v = None
-
-        self.debug = bool(args.debug)
-        self.random = bool(args.random)
-
         self.remove_instances = bool(self.args.remove_instances)
-        
-
-        if self.args.query_model_path is not None:
-            self.query_model = self.args.query_model_path
-            print('Using query_model for querying ', args.query_model_path)
-            # self.query_model = torch.load(self.args.query_model_path)
-            proto_dict = torch.load(self.query_model)
-            self.all_proto_new = proto_dict['embeds'].cuda().half()
-            self.proto_dict_all = torch.load(self.query_model[:-len('.pt')]+'_all.pt')
-            # proto_dict = torch.load('/home/mayug/projects/few_shot/notebooks/embeds_cache_r12_imagenet.pt')
-            # self.all_proto_new = proto_dict['embeds'].cuda()
-            # self.proto_dict_all = torch.load('/home/mayug/projects/few_shot/notebooks/embeds_cache_r12_imagenet_all.pt')
-
-    def normalized_pca(self, a, pca_dim, q=300):
-    
-        # x has to be n_samples*embedding_dim vector
-        a_normalized = F.normalize(a, dim=1)
-        if self.v is None:
-            u,s,v = torch.pca_lowrank(a_normalized, q)
-            self.v = v
-        a_pca = torch.matmul(a_normalized, self.v[:, :self.pca_dim])
-        a_pca_normalized = F.normalize(a_pca, dim=1)
-        return a_pca_normalized
     
     def ids2classes(self, ids):
         if self.args.dataset=='MiniImagenet' or self.args.dataset=='TieredImageNet_og':
@@ -312,146 +236,6 @@ class FEATBaseTransformer2(FewShotModel):
         else:
             raise NotImplementedError
         return classes
-            
-
-    def get_proto_new(self, ids):
-        # print('calling get proto new')
-        # using presaved val and test protos instead of running through resnet_imagenet each time
-        # print('using get proto new')
-        indices = [np.argwhere(np.array(self.proto_dict_all['ids'])==i).item() for i in ids]
-        
-        return torch.cat([self.proto_dict_all['embeds'][i].unsqueeze(0) for i in indices], dim=0).cuda()
-
-    def get_base_protos(self, proto, ids):
-
-
-        proto = proto.squeeze()
-        all_proto = self.all_proto
-        # print('here self traiing ', self.training)
-        # print('ids ', ids)
-        if ids is not None:
-            current_classes = list(set(self.ids2classes(ids)))
-            # remove_instances = True
-        else:
-            current_classes = []
-            # remove_instances = False
-        # print('current classes ', current_classes)
-        # print('proto 5 mean', proto[5].mean())
-        if self.args.query_model_path is not None:
-            
-            proto = self.get_proto_new(ids[:5])
-            all_proto = self.all_proto_new
-
-
-        if self.pca_dim is not None:
-            all_proto = self.normalized_pca(all_proto)
-            proto = self.normalized_pca(proto)
-
-
-        # print('before get_k_base ', [proto.shape, all_proto.shape])
-        
-        top_k, mask = get_k_base(proto, all_proto, k=self.args.k,
-                        remove_instances=self.remove_instances, 
-                        all_classes=self.all_classes,
-                        current_classes=current_classes,
-                        train=self.training, random=self.random)
-
-        self.top_k = (top_k, mask)
-        
-        all_proto = self.all_proto[~mask]
-
-        base_protos = all_proto[top_k, :]
-
-        return base_protos
 
     def _forward(self, instance_embs, support_idx, query_idx, ids=None):
-        print('here inside bit2')
-        emb_dim = instance_embs.size(-1)
-
-        # organize support/query data
-        support = instance_embs[support_idx.contiguous().view(-1)].contiguous().view(*(support_idx.shape + (-1,)))
-        query   = instance_embs[query_idx.contiguous().view(-1)].contiguous().view(  *(query_idx.shape   + (-1,)))
-    
-        
-        
-
-        # get mean of the support
-        proto = support.mean(dim=1) # Ntask x NK x d
-
-        # add closest 10 base classes to proto and calculate mean
-        with torch.no_grad():
-            base_protos = self.get_base_protos(proto, ids)
-        
-        
-        # including base_protos into key and value
-        proto = proto.squeeze()
-
-        combined_protos = base_protos
-
-        proto = proto.unsqueeze(0)
-
-        combined_protos = combined_protos.reshape(-1, emb_dim).unsqueeze(0)
-
-        num_batch = proto.shape[0]
-        num_proto = proto.shape[1]
-        num_query = np.prod(query_idx.shape[-2:])
-    
-        # query: (num_batch, num_query, num_proto, num_emb)
-        # proto: (num_batch, num_proto, num_emb)
-        
-        proto = self.slf_attn(proto, combined_protos, combined_protos)
-
-        if self.feat_attn==1:
-            proto = self.self_attn2(proto, proto, proto)
-        self.after_attn = proto
-
-        # print('after attention ', proto.shape)
-        if self.args.use_euclidean:
-            query = query.view(-1, emb_dim).unsqueeze(1) # (Nbatch*Nq*Nw, 1, d)
-            proto = proto.unsqueeze(1).expand(num_batch, num_query, num_proto, emb_dim).contiguous()
-            proto = proto.view(num_batch*num_query, num_proto, emb_dim) # (Nbatch x Nq, Nk, d)
-
-            logits = - torch.sum((proto - query) ** 2, 2) / self.args.temperature
-        else:
-            proto = F.normalize(proto, dim=-1) # normalize for cosine distance
-            query = query.view(num_batch, -1, emb_dim) # (Nbatch,  Nq*Nw, d)
-
-            logits = torch.bmm(query, proto.permute([0,2,1])) / self.args.temperature
-            logits = logits.view(-1, num_proto)
-        
-        # for regularization
-        if self.training:
-            # return logits, None
-            # TODO this can be further adapted for basetransformer version
-
-            aux_task = torch.cat([support.view(1, self.args.shot, self.args.way, emb_dim), 
-                                  query.view(1, self.args.query, self.args.way, emb_dim)], 1) # T x (K+Kq) x N x d
-            num_query = np.prod(aux_task.shape[1:3])
-            aux_task = aux_task.permute([0, 2, 1, 3])
-            aux_task = aux_task.contiguous().view(-1, self.args.shot + self.args.query, emb_dim)
-            # apply the transformation over the Aug Task
-            if self.feat_attn==1:
-                aux_emb = self.self_attn2(aux_task, aux_task, aux_task) # T x N x (K+Kq) x d
-            else:
-                aux_emb = self.slf_attn(aux_task, aux_task, aux_task)
-            # compute class mean
-            aux_emb = aux_emb.view(num_batch, self.args.way, self.args.shot + self.args.query, emb_dim)
-            aux_center = torch.mean(aux_emb, 2) # T x N x d
-            
-            if self.args.use_euclidean:
-                aux_task = aux_task.permute([1,0,2]).contiguous().view(-1, emb_dim).unsqueeze(1) # (Nbatch*Nq*Nw, 1, d)
-                aux_center = aux_center.unsqueeze(1).expand(num_batch, num_query, num_proto, emb_dim).contiguous()
-                aux_center = aux_center.view(num_batch*num_query, num_proto, emb_dim) # (Nbatch x Nq, Nk, d)
-                # print('aux center ', aux_center.shape)
-                # print('aux_task ', aux_task.shape)
-                logits_reg = - torch.sum((aux_center - aux_task) ** 2, 2) / self.args.temperature2
-            else:
-                aux_center = F.normalize(aux_center, dim=-1) # normalize for cosine distance
-                aux_task = aux_task.permute([1,0,2]).contiguous().view(num_batch, -1, emb_dim) # (Nbatch,  Nq*Nw, d)
-    
-                logits_reg = torch.bmm(aux_task, aux_center.permute([0,2,1])) / self.args.temperature2
-                logits_reg = logits_reg.view(-1, num_proto)            
-            
-            return logits, logits_reg            
-        else:
-            return logits   
+        raise NotImplementedError

@@ -35,6 +35,12 @@ if __name__ == '__main__':
     # args.method = 'proto_FGKVM'
     args.method = 'MBT'
     # args.method = 'PMBT'
+    if args.backbone_class == 'ConvNet':
+        args.init_weights = './saves/mini_conv4_ver11_113120.pth'
+        args.dim_model = 64
+    elif args.backbone_class == 'Res12':
+        args.init_weights = './saves/mini_r12_ver2_corrected_140403.pth'
+        args.dim_model = 640
 
     trainer = FSLTrainer(args)
 

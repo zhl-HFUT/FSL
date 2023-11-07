@@ -159,29 +159,14 @@ def postprocess_args(args):
                            'b{}'.format(args.balance),
                            'bsz{:03d}'.format( max(args.way, args.num_classes)*(args.shot+args.query) )
                            ])    
-    if args.init_weights is not None:
-        save_path1 += '-Pre'
-    if args.use_euclidean:
-        save_path1 += '-DIS'
-    else:
-        save_path1 += '-SIM'
+    save_path1 += '-Pre'
+    save_path1 += '-DIS'
 
-    if args.k:
-        save_path2 += '_k{}'.format(str(args.k))
     if args.base_wt:
         save_path2 += '_bwt{}'.format(str(args.base_wt))
 
     save_path2 += '_{}'.format(str(time.strftime('%Y%m%d_%H%M%S')))
 
-    if args.fix_BN:
-        save_path2 += '-FBN'
-    if not args.augment:
-        save_path2 += '-NoAug'
-
-    
-        
-    
-            
     if not os.path.exists(os.path.join(args.save_dir, save_path1)):
         os.mkdir(os.path.join(args.save_dir, save_path1))
     args.save_path = os.path.join(args.save_dir, save_path1, save_path2)
@@ -192,36 +177,14 @@ def get_command_line_parser():
     parser.add_argument('--max_epoch', type=int, default=200)
     parser.add_argument('--episodes_per_epoch', type=int, default=100)
     parser.add_argument('--num_eval_episodes', type=int, default=600)
-    parser.add_argument('--model_class', type=str, default='FEAT', 
-                        choices=['MatchNet', 'ProtoNet', 'BILSTM', 'DeepSet', 'GCN', 'FEAT', 'FEATSTAR', 
-                        'FEATv3_1', 'FEATv3_2_2', 'SemiFEAT', 'SemiProtoFEAT',
-                        'FEATBaseClass', 'FEATBaseTransformer', 'FEATSAL', 'FEATBaseTransformer2', 
-                        'FEATBaseClass2', 'FEATBaseSalCrop', 'FEATSAL2', 'FEATBaseTransformer3',
-                        'FEAT_Aux', 'FEATBaseTransformer3_Aux', 'BIT3_pretrain', 'FEATBaseTransformer3_2d',
-                        'FEATBaseTransformer3_2d_sym', 'FEATBaseTransformer3_2d_patch',
-                        'FEATBaseTransformer3_2d_ctx', 'FEATBaseTransformer3_2d_5shot',
-                        'FEATBaseTransformer3_2d_5shot_v2',
-                        'FEATBaseTransformer3_2d_5shot_v3',
-                        'FEATBaseTransformer3_2d_sym_ctx',
-                        'FEATBaseTransformer3_2d_ctx_mix']) # None for MatchNet or ProtoNet
-    parser.add_argument('--base_wt', type=float, default=None)
-    parser.add_argument('--k', type=int, default=None)
-    parser.add_argument('--update_base_interval', type=int, default=None)
-    parser.add_argument('--patience', type=int, default=10) # number of epochs after which base_embeds update will run
-    parser.add_argument('--base_protos', type=int, default=1)
+    parser.add_argument('--model_class', type=str, default='FEATBaseTransformer3_2d', 
+                        choices=['MatchNet', 'ProtoNet', 'FEAT','FEATBaseTransformer3_2d'])
+    parser.add_argument('--base_wt', type=float, default=0.1)
 
-    parser.add_argument('--feat_attn', type=int, default=0) # this is only for feat_basetransformer2
-    parser.add_argument('--query_attn', type=int, default=0)
-
-    parser.add_argument('--sal_crop', type=str, default=None)
-    parser.add_argument('--random', type=int, default=0) # just use random base instances instead of top_k, k is the number of random base instances
-
-    parser.add_argument('--max_pool', type=str, default='max_pool')
     parser.add_argument('--resize', type=int, default=1)
 
-    parser.add_argument('--use_euclidean', action='store_true', default=False)    
     parser.add_argument('--backbone_class', type=str, default='ConvNet',
-                        choices=['ConvNet', 'Res12', 'Res18', 'WRN', 'Res12_ptcv', 'Res12_info', 'WRN_S2M2'])
+                        choices=['ConvNet', 'Res12'])
     parser.add_argument('--dataset', type=str, default='MiniImageNet',
                         choices=['MiniImageNet', 'TieredImageNet', 'TieredImageNet_og', 'CUB'])
     
@@ -238,86 +201,44 @@ def get_command_line_parser():
     parser.add_argument('--temperature2', type=float, default=1)  # the temperature in the  
      
     # optimization parameters
+    parser.add_argument('--image_size', type=int, default=None)
     parser.add_argument('--orig_imsize', type=int, default=-1) # -1 for no cache, and -2 for no resize, only for MiniImageNet and CUB
     parser.add_argument('--lr', type=float, default=0.0001)
     parser.add_argument('--lr_mul', type=float, default=10)    
     parser.add_argument('--lr_scheduler', type=str, default='step', choices=['multistep', 'step', 'cosine', 'onecycle', 'cyclic'])
     parser.add_argument('--step_size', type=str, default='20')
-    parser.add_argument('--gamma', type=float, default=0.2)    
-    parser.add_argument('--fix_BN', action='store_true', default=False)     # means we do not update the running mean/var in BN, not to freeze BN
-    parser.add_argument('--fix_BN_only', action='store_true', default=False)     # same as above but eval only applied to BN layers
+    parser.add_argument('--gamma', type=float, default=0.5)    
 
-    parser.add_argument('--augment',   action='store_true', default=False)
-    parser.add_argument('--multi_gpu', action='store_true', default=False)
     parser.add_argument('--gpu', default='0')
-    parser.add_argument('--init_weights', type=str, default=None) # initialize the BaseTransformer
-    parser.add_argument('--init_weights_tx', type=str, default=None)
     
     parser.add_argument('--mixed_precision', type=str, default=None) # for old non amp checkpoints
     # default functionality is None
 
     # usually untouched parameters
-    parser.add_argument('--mom', type=float, default=0.9)
+    parser.add_argument('--momentum', type=float, default=0.9) #SGD momentum
     parser.add_argument('--weight_decay', type=float, default=0.0005) # we find this weight decay value works the best
-    parser.add_argument('--num_workers', type=int, default=4)
+    parser.add_argument('--num_workers', type=int, default=8)
     parser.add_argument('--log_interval', type=int, default=100)
     parser.add_argument('--eval_interval', type=int, default=1)
     parser.add_argument('--save_dir', type=str, default='./checkpoints')
 
-
     # test checkpoint
     parser.add_argument('--test', type=str, default=None)
-    
-    # debug
-    parser.add_argument('--debug', type=int, default=0)
 
-    # top_k querying using a different model;
-    parser.add_argument('--query_model_path', type=str, default=None)
-    parser.add_argument('--pca_dim', type=int, default=None) # dimension for pca while querying
-
-    parser.add_argument('--pass_ids', type=int, default=0) # this is for instancetransformers; to prevent same class instances in topk
-    parser.add_argument('--remove_instances', type=int, default=0)
+    parser.add_argument('--pass_ids', type=int, default=1) # this is for instancetransformers; to prevent same class instances in topk
+    parser.add_argument('--remove_instances', type=int, default=1)
     # be careful; both pass_ids and remove_instances should be 1 for old functionality of pass_ids=1
-
-    parser.add_argument('--image_size', type=int, default=None)
-
-    # this is for proto_bit3_2d; whats pooling before final euclidian calc;
-    parser.add_argument('--embed_pool', type=str, default='post_loss_avg')
 
     parser.add_argument('--exp_name', type=str, default=None)
     parser.add_argument('--drop_rate', type=float, default=0.1)
 
-    parser.add_argument('--dim_model', type=int, default=64)
-
-    parser.add_argument('--tx_k_v', type=int, default=None)
-
-    # fast_query
-    parser.add_argument('--fast_query', type=str, default=None)
-
-    # embeds_cache 1d and 2d
-    parser.add_argument('--embeds_cache_1d', type=str, default=None)
-    parser.add_argument('--embeds_cache_2d', type=str, default=None)
     parser.add_argument('--baseinstance_2d_norm', type=str, default=None)
-
 
     parser.add_argument('--wandb_mode', type=str, default='disabled')
 
-    parser.add_argument('--n_patches', type=int, default=None)
-
-    # parser.add_argument('--cockpit', type=str, default=None)
-
     parser.add_argument('--return_simclr', type=int, default=None) # number of views in simclr
-    parser.add_argument('--label_aux_type', type=str, default=None) # number of views in simclr
-
-    parser.add_argument('--simclr_loss_type', type=str, default=None)
 
     parser.add_argument('--config', type=str, default=None)
-
-    parser.add_argument('--base_protos_path', type=str, default=None)
-
-    # ctx models
-    parser.add_argument('--attn_model', type=str, default=None)
-    parser.add_argument('--do_query_attn', type=int, default=1)
 
     parser.add_argument('--z_norm', type=str, default=None, choices=['before_tx', 'before_euclidian', 
                                                                     'both', None])

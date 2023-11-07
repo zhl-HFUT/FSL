@@ -81,7 +81,6 @@ class FewShotModel(nn.Module):
                 drop_rate=args.drop_rate, out_dim=hdim)
         else:
             raise ValueError('')
-        self.sal_crop = args.sal_crop
         self.hdim = hdim
 
     @torch.no_grad()

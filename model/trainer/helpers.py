@@ -4,7 +4,6 @@ import numpy as np
 import torch.optim as optim
 from torch.utils.data import DataLoader
 from model.dataloader.samplers import CategoriesSampler, RandomSampler, ClassSampler
-from model.models.feat import FEAT
 from model.models.feat_basetransformer2 import FEATBaseTransformer2
 from model.models.feat_basetransformer3 import FEATBaseTransformer3
 from model.models.feat_basetransformer3_2d import FEATBaseTransformer3_2d
@@ -41,11 +40,10 @@ def get_dataloader(args):
     else:
         raise ValueError('Non-supported Dataset.')
 
-    num_device = torch.cuda.device_count()
-    num_episodes = args.episodes_per_epoch*num_device if args.multi_gpu else args.episodes_per_epoch
-    num_workers=args.num_workers*num_device if args.multi_gpu else args.num_workers
+    num_episodes = args.episodes_per_epoch
+    num_workers = args.num_workers
     # print('args.pass_ids', bool(args.pass_ids))
-    trainset = Dataset('train', args, augment=args.augment, 
+    trainset = Dataset('train', args, augment=False, 
         return_id=bool(args.pass_ids), return_simclr=args.return_simclr)
     # ids to be passed to prevent base examples from the class of support instance not be considered 
     # by transformer.
@@ -109,20 +107,7 @@ def prepare_model(args):
         if args.backbone_class == 'ConvNet' and not state_dict:
             pretrained_dict = {'encoder.'+k: v for k, v in pretrained_dict.items()}
         
-        if args.init_weights_tx is not None:
-            print('loading tx state dict ', args.init_weights_tx)
-            pretrained_dict_tx = torch.load(args.init_weights_tx)['params']
-            # print('here ', pretrained_dict_tx.keys())
-            pretrained_dict_tx = {k:v for k, v in pretrained_dict_tx.items() if 'slf_attn' in k}
-            # print('after filtering ', pretrained_dict_tx.keys())
-        
-        # print('model dict keys ', model_dict.keys())
-        # print('dict keys before', pretrained_dict.keys())
-        # asd
-        
         pretrained_dict = {k: v for k, v in pretrained_dict.items() if k in model_dict}
-        if args.init_weights_tx is not None:
-            pretrained_dict.update(pretrained_dict_tx)
         # print('pretrained dict keys after filtering', pretrained_dict.keys())
         
         model_dict.update(pretrained_dict)
@@ -138,15 +123,10 @@ def prepare_model(args):
         torch.backends.cudnn.benchmark = True
         
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    print(['device', device, args.multi_gpu])
+    print(['device', device])
     model = model.to(device)
-    if args.multi_gpu:
-        model.encoder = nn.DataParallel(model.encoder, dim=0)
-        para_model = model.to(device)
-    else:
-        para_model = model.to(device)
 
-    return model, para_model
+    return model
 
 def prepare_optimizer(model, args):
     top_para = [v for k,v in model.named_parameters() if 'encoder' not in k]       
@@ -163,7 +143,7 @@ def prepare_optimizer(model, args):
             [{'params': model.encoder.parameters()},
              {'params': top_para, 'lr': args.lr * args.lr_mul}],
             lr=args.lr,
-            momentum=args.mom,
+            momentum=args.momentum,
             nesterov=True,
             weight_decay=args.weight_decay
         )        
