@@ -34,40 +34,17 @@ def init_seed(seed):
 def get_parser():
     parser = get_command_line_parser()
     args = parser.parse_args([])
-    args.max_epoch = 200
-    args.model_class = 'FEATBaseTransformer3_2d'
-    args.use_euclidean = True
     args.backbone_class = 'ConvNet'
-    args.dataset = 'MiniImageNet'
-    args.way = 5
-    args.eval_way = 5
     args.shot = 1
     args.eval_shot = 1
-    args.query = 15
-    args.eval_query = 15
     args.balance = 0.0
     args.temperature = 0.1
     args.temperature2 = 0.1
     args.lr = 0.0001
-    args.lr_mul = 10
-    args.lr_scheduler = 'step'
     args.step_size = '20'
-    args.gamma = 0.5
-    args.gpu = '0'
-    args.init_weights = './saves/mini_conv4_ver11_113120.pth'
-    args.eval_interval = 1
-    args.k = 30
-    args.base_protos = 0
-    args.feat_attn = 0
-    args.pass_ids = 1
-    args.base_wt = 0.1
-    args.remove_instances = 1
-    args.embed_pool = 'post_loss_avg'
     args.orig_imsize = 128
-    args.fast_query = './embeds_cache/fastq_imgnet_wordnet_pathsim_random-preset-wts.pt'
-    args.embeds_cache_2d = './embeds_cache/embeds_cache_cnn4_contrastive-init-ver1-1-corrected_2d.pt'
     args.wandb_mode = 'disabled'
-    # args.mixed_precision = 'O2'
+    args.mixed_precision = 'O2'
     args.z_norm = 'before_tx'
 
     return args

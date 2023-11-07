@@ -1,9 +1,85 @@
-from .feat_basetransformer3 import FEATBaseTransformer3
+from model.models import FewShotModel
 import torch
 import numpy as np
 import torch.nn.functional as F
 import torch.nn as nn
 import random
+
+class ScaledDotProductAttention(nn.Module):
+    ''' Scaled Dot-Product Attention '''
+
+    def __init__(self, temperature, attn_dropout=0.1):
+        super().__init__()
+        self.temperature = temperature
+        self.dropout = nn.Dropout(attn_dropout)
+        self.softmax = nn.Softmax(dim=2)
+
+    def forward(self, q, k, v):
+
+        attn = torch.bmm(q, k.transpose(1, 2))
+        attn = attn / self.temperature
+        log_attn = F.log_softmax(attn, 2)
+        attn = self.softmax(attn)
+        attn = self.dropout(attn)
+        output = torch.bmm(attn, v)
+        return output, attn, log_attn
+
+class MultiHeadAttention(nn.Module):
+    ''' Multi-Head Attention module '''
+
+    def __init__(self, n_head, d_model, d_k, d_v, dropout=0.1):
+        super().__init__()
+        print('Creating transformer with d_k, d_v, d_model = ', [d_k, d_v, d_model])
+        self.n_head = n_head
+        self.d_k = d_k
+        self.d_v = d_v
+
+        self.w_qs = nn.Linear(d_model, n_head * d_k, bias=False)
+        self.w_ks = nn.Linear(d_model, n_head * d_k, bias=False)
+        self.w_vs = nn.Linear(d_model, n_head * d_v, bias=False)
+        nn.init.normal_(self.w_qs.weight, mean=0, std=np.sqrt(2.0 / (d_model + d_k)))
+        nn.init.normal_(self.w_ks.weight, mean=0, std=np.sqrt(2.0 / (d_model + d_k)))
+        nn.init.normal_(self.w_vs.weight, mean=0, std=np.sqrt(2.0 / (d_model + d_v)))
+
+        self.attention = ScaledDotProductAttention(temperature=np.power(d_k, 0.5))
+        self.layer_norm = nn.LayerNorm(d_model)
+
+        self.fc = nn.Linear(n_head * d_v, d_model)
+        nn.init.xavier_normal_(self.fc.weight)
+        self.dropout = nn.Dropout(dropout)
+        
+    def forward(self, q, k, v):
+        # print('here', [q.shape, k.shape, v.shape])
+        d_k, d_v, n_head = self.d_k, self.d_v, self.n_head
+        sz_b, len_q, _ = q.size()
+        sz_b, len_k, _ = k.size()
+        sz_b, len_v, _ = v.size()
+
+        # print('here inside self attn q ', [type(q.detach().cpu().numpy()[0,0,0]), q.shape, q[0,0,0]])
+        # print('here inside self attn k ', [type(k.detach().cpu().numpy()[0,0,0]), k.shape, k[0,0,0]])
+        # print('here inside self attn v ', [type(v.detach().cpu().numpy()[0,0,0]), v.shape, v[0,0,0]])
+        residual = q
+        q = self.w_qs(q).view(sz_b, len_q, n_head, d_k)
+        k = self.w_ks(k).view(sz_b, len_k, n_head, d_k)
+        v = self.w_vs(v).view(sz_b, len_v, n_head, d_v)
+        
+        q = q.permute(2, 0, 1, 3).contiguous().view(-1, len_q, d_k) # (n*b) x lq x dk
+        k = k.permute(2, 0, 1, 3).contiguous().view(-1, len_k, d_k) # (n*b) x lk x dk
+        v = v.permute(2, 0, 1, 3).contiguous().view(-1, len_v, d_v) # (n*b) x lv x dv
+
+        # print('Inside multi head before self.attention ', [q.shape, k.shape, v.shape])
+
+        output, attn, log_attn = self.attention(q, k, v)
+        # print('here ', attn.shape)
+        # print('log attn ', log_attn.shape)
+
+        output = output.view(n_head, sz_b, len_q, d_v)
+        output = output.permute(1, 2, 0, 3).contiguous().view(sz_b, len_q, -1) # b x lq x (n*dv)
+
+        output = self.dropout(self.fc(output))
+        output = self.layer_norm(output + residual)
+
+        return output
 
 def apply_z_norm(features):                                                                                                                                                    
     d = features.shape[-1]                                                                                                                                                     
@@ -53,12 +129,10 @@ def get_choose(n_key, n_classes=5):
     label = torch.Tensor(label_list)
     return choose, positive_choose
 
-class FEATBaseTransformer3_2d(FEATBaseTransformer3):
+class FEATBaseTransformer3_2d(FewShotModel):
     def __init__(self, args):
-        args.max_pool = False
-        args.resize = False
         super().__init__(args)
-        # these 2d embeddings of base instances are used for combination
+        self.slf_attn = MultiHeadAttention(args.n_heads, args.dim_model, args.dim_model, args.dim_model, dropout=0.5)
         
         import json
         with open('wordnet_sim_labels.json', 'r') as file:
@@ -67,7 +141,6 @@ class FEATBaseTransformer3_2d(FEATBaseTransformer3):
             
         self.embed_pool = torch.nn.Identity()
  
-        self.spatial_dim = None # will be initialized in forward
         self.label_aux = None
 
         self.choose = None
@@ -122,103 +195,69 @@ class FEATBaseTransformer3_2d(FEATBaseTransformer3):
 
     def _forward(self, instance_embs, support_idx, query_idx, ids=None, simclr_embs=None, key_cls=None):
 
-        spatial_dim = instance_embs.shape[-1]
-        self.spatial_dim = spatial_dim
-        emb_dim = instance_embs.size(-3)
+        spatial_dim = 5
+        n_class = 5
+        n_simcls = 5
+        n_batch = 1
+        emb_dim = self.args.dim_model
 
-        support = instance_embs[support_idx.contiguous().view(-1)].contiguous().view(*(support_idx.shape + (emb_dim, spatial_dim, spatial_dim,)))
-        query   = instance_embs[query_idx.contiguous().view(-1)].contiguous().view(  *(query_idx.shape   + (emb_dim, spatial_dim, spatial_dim,)))
-
-        proto = support.mean(dim=1) 
-        n_class = proto.shape[1]
-        n_batch = proto.shape[0]
-
+        support = instance_embs[support_idx.contiguous().view(-1)].contiguous().view(*(support_idx.shape + (emb_dim, spatial_dim, spatial_dim))) # 1,1,5,64,5,5
+        query   = instance_embs[query_idx.contiguous().view(-1)].contiguous().view(*(query_idx.shape + (emb_dim, spatial_dim, spatial_dim))) # 1,15,5,64,5,5
+        proto = support.mean(dim=1) # 1,5,64,5,5
+        
         if self.training:
             self.wordnet_sim_labels['n0461250400'][4] = random.choice([21, 49, 52, 40])
             top_indices = np.stack([self.wordnet_sim_labels[id_[:11]] for id_ in ids[:5]], axis=0)
-            base_protos = self.memory[torch.Tensor(top_indices).long()].reshape(5, 5, 640)
+            base_protos = self.memory[torch.Tensor(top_indices).long()].reshape(n_class, n_simcls, emb_dim, spatial_dim, spatial_dim)
         else:
             top_indices = np.stack([self.wordnet_sim_labels[id_[:11]] for id_ in ids[:5]], axis=0)
-            base_protos = self.memory[torch.Tensor(top_indices).long()].reshape(5, 5, 640)
+            base_protos = self.memory[torch.Tensor(top_indices).long()].reshape(n_class, n_simcls, emb_dim, spatial_dim, spatial_dim)
 
-        # if self.baseinstance_2d_norm:
-        #     base_protos = base_protos.reshape(n_class*k, emb_dim, spatial_dim, spatial_dim)
-        #     base_protos = self.baseinstance_2d_norm(base_protos)
-        #     base_protos = base_protos.reshape(n_class, k, emb_dim, spatial_dim, spatial_dim)
+        if self.baseinstance_2d_norm:
+            base_protos = base_protos.reshape(n_class*n_simcls, emb_dim, spatial_dim, spatial_dim)
+            base_protos = self.baseinstance_2d_norm(base_protos)
+            base_protos = base_protos.reshape(n_class, n_simcls, emb_dim, spatial_dim, spatial_dim)
 
-        if self.args.z_norm=='before_tx' or self.args.z_norm=='both':                                                                                                          
-                                                                                                                                                                               
-            # b1, b2, b3, b4, _ = base_protos.shape                                                                                                                              
-            # p1, p2, p3, p4, _ = proto.shape                                                                                                                                    
-            # base_protos = base_protos.reshape(b1*b2, b3*b4*b4)                                                                                                                 
-            # proto = proto.reshape(p1*p2, p3*p4*p4)                                                                                                                             
-
-            base_protos = base_protos.reshape(25, 640)                                                                                                              
-            proto = proto.reshape(5, 640)
+        if self.args.z_norm=='before_tx':
+            base_protos = base_protos.reshape(n_class*n_simcls, emb_dim*spatial_dim*spatial_dim)
+            proto = proto.reshape(n_class, emb_dim*spatial_dim*spatial_dim)
             base_protos, proto = apply_z_norm(base_protos), apply_z_norm(proto)                                                                                                
-            # base_protos = base_protos.reshape(b1,b2,b3,b4,b4)                                                                                                                  
-            # proto = proto.reshape(p1,p2,p3,p4,p4)   
-            origin_proto = proto.view(5, 1, 640)                                                                                                                           
+            base_protos = base_protos.reshape(n_class, n_simcls, emb_dim, spatial_dim, spatial_dim)
+            proto = proto.reshape(n_batch, n_class, emb_dim, spatial_dim, spatial_dim)
 
-        # proto = proto.reshape(proto.shape[1], emb_dim, -1).permute(0, 2, 1).contiguous()
-        proto = proto.reshape(5, 640, 1).permute(0, 2, 1).contiguous()
+        origin_proto = proto.view(5, 1, emb_dim*spatial_dim*spatial_dim).contiguous()
 
-        # base_protos = base_protos.permute(0, 2, 1, 3, 4).contiguous()
-        combined_protos = base_protos.reshape(5, 640, 5).permute(0, 2, 1).contiguous()
+        proto = proto.view(5, emb_dim, spatial_dim*spatial_dim).permute(0, 2, 1).contiguous()
+        combined_bases = base_protos.permute(0, 1, 3, 4, 2).reshape(n_class, n_simcls*spatial_dim*spatial_dim, emb_dim).contiguous() # 5,125,64
 
-        if self.args.method == 'proto_net_only':
-            proto = proto.permute(0, 2, 1).contiguous()
-            proto = proto.view(-1, emb_dim, spatial_dim, spatial_dim)
-            query = query.view(-1, emb_dim, spatial_dim, spatial_dim)
-            proto = proto.reshape(proto.shape[0], -1).unsqueeze(0)
-            query = query.reshape(query.shape[0], -1)
-            emb_dim = emb_dim*(spatial_dim**2)
-            num_batch = proto.shape[0]
-            num_proto = proto.shape[1]
-            num_query = np.prod(query_idx.shape[-2:])
-            # print(proto.shape, query.shape)
+        # 在此做attention增强
+        proto = self.slf_attn(proto, combined_bases, combined_bases) # 5,25,64
+        proto = proto.permute(0, 2, 1).contiguous() # 5,64,25
 
-            query = query.view(-1, emb_dim).unsqueeze(1) # (Nbatch*Nq*Nw, 1, d)
-            proto = proto.unsqueeze(1).expand(num_batch, num_query, num_proto, emb_dim).contiguous()
-            proto = proto.view(num_batch*num_query, num_proto, emb_dim) # (Nbatch x Nq, Nk, d)
-            # print(proto.shape, query.shape)
+        # 计算logits-meta
+        proto = proto.view(1, -1, emb_dim*spatial_dim*spatial_dim).contiguous() # 1,5,1600
+        query = query.view(-1, 1, emb_dim*spatial_dim*spatial_dim).contiguous() # 75,1,1600
+        logits = - torch.mean((proto - query) ** 2, 2) / self.args.temperature
 
-            logits = - torch.mean((proto - query) ** 2, 2) / self.args.temperature
-            return logits
-
-        proto = self.slf_attn(proto, combined_protos, combined_protos)
-        proto = proto.permute(0, 2, 1).contiguous()
-
-        proto = proto.view(-1, emb_dim, spatial_dim, spatial_dim)
-        query = query.view(-1, emb_dim, spatial_dim, spatial_dim)
-
-        proto = proto.reshape(proto.shape[0], -1).unsqueeze(0)
-        query = query.reshape(query.shape[0], -1)
-        emb_dim = emb_dim*(spatial_dim**2)
-       
-            
-        num_batch = proto.shape[0]
-        num_proto = proto.shape[1]
-        num_query = np.prod(query_idx.shape[-2:])
-
-        self.after_attn = proto #（1，5，1600）
-
+        # task feature部分
         if self.training:
-            # 此处过blstm
+            # attention之前的任务特征
             output, hn, cn = self.lstm(origin_proto)
             feat_task_1 = hn.mean(dim = 0)
             feat_task_1 = nn.functional.normalize(feat_task_1, dim=1) # (1, 256)
 
-            output, hn, cn = self.lstm(proto.view(5, 1, 640))
+            # attention之后的任务特征
+            output, hn, cn = self.lstm(proto.permute(1, 0, 2))
             feat_task_2 = hn.mean(dim = 0)
             feat_task_2 = nn.functional.normalize(feat_task_2, dim=1) # (1, 256)
 
-            # 计算metrics, sims等
+            # 计算metrics
             metric_pos = torch.dot(feat_task_2.squeeze(0), feat_task_1.squeeze(0)).unsqueeze(-1)
             metric_memory = torch.mm(feat_task_2, self.queue.clone().detach().t())
             metrics = torch.cat((metric_pos, metric_memory.squeeze(0)), dim=0)
             metrics /= self.T
 
+            # 计算task overlap sims，得到纯负样本index
             sims = [1]
             pure_index = [0]
             for i in range(self.K):
@@ -226,49 +265,20 @@ class FEATBaseTransformer3_2d(FEATBaseTransformer3):
                 if not bool(len(np.intersect1d(self.classes[i,:], key_cls.cpu()))):
                     pure_index.append(i+1)
             
-            # 入队出队
+            # attention之后的任务特征入队
             self._dequeue_and_enqueue(feat_task_2, key_cls.cpu())
 
-        query = query.view(-1, emb_dim).unsqueeze(1) # (Nbatch*Nq*Nw, 1, d)
-        proto = proto.unsqueeze(1).expand(num_batch, num_query, num_proto, emb_dim).contiguous()
-        proto = proto.view(num_batch*num_query, num_proto, emb_dim) # (Nbatch x Nq, Nk, d)
-
-        logits = - torch.mean((proto - query) ** 2, 2) / self.args.temperature
-
-        # for regularization
+        # simclr logits部分
         if self.training:
-            # return logits, None
-            # TODO this can be further adapted for basetransformer version
-                # implementing simclr loss on the encoder embeddings
             if  simclr_embs is not None:
                 fc_simclr = None
-
                 logits_simclr = self.get_simclr_logits(simclr_embs,
                     temperature_simclr=self.args.temperature2,
                     fc_simclr=fc_simclr) 
                 return logits, logits_simclr, metrics, sims, pure_index
             # 训练时在这里return
             if self.args.balance==0:
-
-                return logits, None, metrics, sims, pure_index
-            aux_task = torch.cat([support.view(1, self.args.shot, self.args.way, emb_dim), 
-                                  query.view(1, self.args.query, self.args.way, emb_dim)], 1) # T x (K+Kq) x N x d
-            num_query = np.prod(aux_task.shape[1:3])
-            aux_task = aux_task.permute([0, 2, 1, 3])
-            aux_task = aux_task.contiguous().view(-1, self.args.shot + self.args.query, emb_dim)
-            # apply the transformation over the Aug Task
-            aux_emb = self.slf_attn(aux_task, combined_protos, combined_protos)
-            # compute class mean
-            aux_emb = aux_emb.view(num_batch, self.args.way, self.args.shot + self.args.query, emb_dim)
-            aux_center = torch.mean(aux_emb, 2) # T x N x d
-            
-            aux_task = aux_task.permute([1,0,2]).contiguous().view(-1, emb_dim).unsqueeze(1) # (Nbatch*Nq*Nw, 1, d)
-            aux_center = aux_center.unsqueeze(1).expand(num_batch, num_query, num_proto, emb_dim).contiguous()
-            aux_center = aux_center.view(num_batch*num_query, num_proto, emb_dim) # (Nbatch x Nq, Nk, d)
-
-            logits_reg = - torch.sum((aux_center - aux_task) ** 2, 2) / self.args.temperature2        
-            # 训练时在这里return
-            return logits, logits_reg            
+                return logits, None, metrics, sims, pure_index         
         # 测试时在这里return
         else:
             return logits

@@ -75,11 +75,9 @@ class BasicBlock(nn.Module):
 class ResNet(nn.Module):
 
     def __init__(self, block=BasicBlock, keep_prob=1.0, avg_pool=True, 
-        drop_rate=0.1, dropblock_size=5, resize=True, out_dim=640):
+        drop_rate=0.1, dropblock_size=5, out_dim=640):
         self.inplanes = 3
         super(ResNet, self).__init__()
-        self.resize = resize
-        # self.resize = False
         # avg_pool=False
         self.layer1 = self._make_layer(block, 64, stride=2, drop_rate=drop_rate)
         self.layer2 = self._make_layer(block, 160, stride=2, drop_rate=drop_rate)
@@ -91,7 +89,6 @@ class ResNet(nn.Module):
         self.keep_avg_pool = avg_pool
         self.dropout = nn.Dropout(p=1 - self.keep_prob, inplace=False)
         self.drop_rate = drop_rate
-        self.resize = resize
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
                 nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='leaky_relu')
@@ -114,7 +111,7 @@ class ResNet(nn.Module):
 
         return nn.Sequential(*layers)
 
-    def forward(self, x, pool=True):
+    def forward(self, x):
         # print('here ', [type(x.detach().cpu().numpy()[0,0,0,0]), x.shape, x[0,0,0,0]])
         
         x = self.layer1(x)
@@ -126,11 +123,9 @@ class ResNet(nn.Module):
         # asd
         x = self.layer4(x)
         # print('before avg pool ', x.shape)
-        if pool:
+        if self.keep_avg_pool:
             x = self.avgpool(x)
         # print('after avg pool ', x.shape)
-        if self.resize:
-            x = x.view(x.size(0), -1)
         return x
 
 

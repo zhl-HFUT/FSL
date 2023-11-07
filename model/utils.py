@@ -226,8 +226,6 @@ def get_command_line_parser():
     parser.add_argument('--test', type=str, default=None)
 
     parser.add_argument('--pass_ids', type=int, default=1) # this is for instancetransformers; to prevent same class instances in topk
-    parser.add_argument('--remove_instances', type=int, default=1)
-    # be careful; both pass_ids and remove_instances should be 1 for old functionality of pass_ids=1
 
     parser.add_argument('--exp_name', type=str, default=None)
     parser.add_argument('--drop_rate', type=float, default=0.1)
@@ -240,7 +238,6 @@ def get_command_line_parser():
 
     parser.add_argument('--config', type=str, default=None)
 
-    parser.add_argument('--z_norm', type=str, default=None, choices=['before_tx', 'before_euclidian', 
-                                                                    'both', None])
+    parser.add_argument('--z_norm', type=str, default=None, choices=['before_tx', 'before_euclidian', 'both', None])
 
     return parser

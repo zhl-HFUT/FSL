@@ -55,10 +55,7 @@ def conv_block(in_channels, out_channels):
 
 class ConvNet(nn.Module):
 
-    def __init__(self, x_dim=3, hid_dim=64, z_dim=64, 
-                 resize=True,
-                 sal=False,
-                 max_pool='max_pool'):
+    def __init__(self, x_dim=3, hid_dim=64, z_dim=64):
         super().__init__()
         self.encoder = nn.Sequential(
             conv_block(x_dim, hid_dim),
@@ -66,39 +63,8 @@ class ConvNet(nn.Module):
             conv_block(hid_dim, hid_dim),
             conv_block(hid_dim, z_dim),
         )
-        self.resize = resize
-        self.sal = sal
-        self.max_pool = max_pool
-        print('HEREEEE self.max_pool = ', self.max_pool)
-        print('HEREEEE self.resize = ', self.resize)
     def forward(self, x):
-        orig = x
-        if self.sal:
-            
-            x = self.encoder[0](x)
-            x = self.encoder[1](x)
-   
-            x = self.encoder[2](x)
-            x = self.encoder[3](x)
-            raise NotImplementedError
-            # sal = get_sal(orig, out_size=x.shape[-2:])
-            # x = x*sal
-            # asd
-        else:
-            x = self.encoder(x)
-        # print('cheking ', self.max_pool)
-        if self.max_pool is not None:
-            if self.max_pool == 'max_pool':
-                # print('using max_pool')
-                x = nn.MaxPool2d(5)(x)
-            elif self.max_pool == 'avg_pool':
-                print('using avg_pool')
-                x = nn.AdaptiveAvgPool2d(1)(x)
-
-        # print(x.shape)
-        if self.resize:
-            x = x.view(x.size(0), -1)
-        # print('x', x.shape)
+        x = self.encoder(x)
         return x
 
 

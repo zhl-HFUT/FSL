@@ -38,9 +38,11 @@ if __name__ == '__main__':
     if args.backbone_class == 'ConvNet':
         args.init_weights = './saves/mini_conv4_ver11_113120.pth'
         args.dim_model = 64
+        args.dim_hn = 256
     elif args.backbone_class == 'Res12':
         args.init_weights = './saves/mini_r12_ver2_corrected_140403.pth'
         args.dim_model = 640
+        args.dim_hn = 2560
 
     trainer = FSLTrainer(args)
 

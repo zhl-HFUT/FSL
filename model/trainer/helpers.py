@@ -4,8 +4,6 @@ import numpy as np
 import torch.optim as optim
 from torch.utils.data import DataLoader
 from model.dataloader.samplers import CategoriesSampler, RandomSampler, ClassSampler
-from model.models.feat_basetransformer2 import FEATBaseTransformer2
-from model.models.feat_basetransformer3 import FEATBaseTransformer3
 from model.models.feat_basetransformer3_2d import FEATBaseTransformer3_2d
 
 class MultiGPUDataloader:

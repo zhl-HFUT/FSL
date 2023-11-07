@@ -39,13 +39,6 @@ class FSLTrainer(Trainer):
         self.return_simclr = True if args.return_simclr is not None else False
         self.train_loader, self.val_loader, self.test_loader = get_dataloader(args)
         self.model = prepare_model(args)
-        for param, param_k in zip(self.model.encoder.parameters(), self.model.encoder_target.parameters()):
-            param_k.data.copy_(param.data)
-            param_k.requires_grad = False
-        
-        for param, param_k in zip(self.model.proj_head.parameters(), self.model.proj_head_target.parameters()):
-            param_k.data.copy_(param.data)
-            param_k.requires_grad = False
         self.optimizer, self.lr_scheduler = prepare_optimizer(self.model, args)
         self.pass_ids = bool(args.pass_ids) # to remove same class instances during training using base dataset
         self.mixed_precision = args.mixed_precision
@@ -112,57 +105,39 @@ class FSLTrainer(Trainer):
                     data, gt_label, ids, data_simclr = batch[0].cuda(), batch[1].cuda(), batch[2], batch[3].cuda()
                 else:
                     data, gt_label, ids = batch[0].cuda(), batch[1].cuda(), batch[2]
+                    data_simclr = None
                 
                 data_tm = time.time()
                 self.dt.add(data_tm - start_tm)
                 
-                if self.args.method == 'proto_net_only':
-                    logits = self.model(data, ids, key_cls=gt_label[:5])
-                    loss_meta = F.cross_entropy(logits, label)
-                    total_loss = loss_meta
-                elif self.args.method == 'proto_FGKVM':
-                    logits, kvmpred, kvmtarget = self.model(data, ids, key_cls=gt_label[:5])
-                    loss_meta = F.cross_entropy(logits, label)
-                    # total_loss = loss_meta + Lmempred
-                    Lmempred = torch.tensor(80.).cuda()
-                    # if self.train_step%100==0:
-                    #     for pred in kvmpred:
-                    #         for target in kvmtarget:
-                    #             print(torch.nn.functional.cosine_similarity(pred, target, dim=0))
-                    # for pred, target in zip(kvmpred, kvmtarget):
-                    #     Lmempred -= torch.nn.functional.cosine_similarity(pred, target, dim=0)
-                    #     if self.train_step%100==0:
-                    #         print(torch.nn.functional.cosine_similarity(pred, target, dim=0))
-                    # print('Lmempred:', Lmempred)
-                    # total_loss = Lmempred + loss_meta*30
-                    total_loss = loss_meta
-                else:
-                    logits, logits_simclr, metrics, sims, pure_index = self.model(data, ids, simclr_images=data_simclr, key_cls=gt_label[:5])
+                logits, logits_simclr, metrics, sims, pure_index = self.model(data, ids, simclr_images=data_simclr, key_cls=gt_label[:5])
 
-                    sims = torch.tensor(sims).cuda()
-                    pure_index = torch.tensor(pure_index).cuda()
-                    pos_index = []
-                    for j in range(len(sims)):
-                        if sims[j] >= 0.8:
-                            pos_index.append(j)
-                    pos_index = torch.tensor(pos_index).cuda()
-                    weight_sum = sims.sum()
-                    metric_exp_sum = torch.exp(metrics).sum()
-                    label_moco = torch.tensor(0).type(torch.cuda.LongTensor)
-                    # loss_infoNCE = loss_infoNCE + F.cross_entropy(metrics, label_moco)
-                    loss_infoNCE_neg = F.cross_entropy(torch.index_select(metrics, 0, pure_index).unsqueeze(0), label_moco.unsqueeze(0))
-                    # loss_sup_con = - (torch.log(torch.exp(torch.index_select(metrics, 0, pos_index)) / metric_exp_sum) * torch.index_select(sims, 0, pos_index)).sum()/weight_sum
-                    # print('loss_sup_con:', loss_sup_con.item())
-                    # loss_pos = torch.tensor(1.0/0.07).cuda() - metrics[0]
+                sims = torch.tensor(sims).cuda()
+                pure_index = torch.tensor(pure_index).cuda()
+                pos_index = []
+                for j in range(len(sims)):
+                    if sims[j] >= 0.8:
+                        pos_index.append(j)
+                pos_index = torch.tensor(pos_index).cuda()
+                weight_sum = sims.sum()
+                metric_exp_sum = torch.exp(metrics).sum()
+                label_moco = torch.tensor(0).type(torch.cuda.LongTensor)
+                # loss_infoNCE = loss_infoNCE + F.cross_entropy(metrics, label_moco)
+                loss_infoNCE_neg = F.cross_entropy(torch.index_select(metrics, 0, pure_index).unsqueeze(0), label_moco.unsqueeze(0))
+                # loss_sup_con = - (torch.log(torch.exp(torch.index_select(metrics, 0, pos_index)) / metric_exp_sum) * torch.index_select(sims, 0, pos_index)).sum()/weight_sum
+                # print('loss_sup_con:', loss_sup_con.item())
+                # loss_pos = torch.tensor(1.0/0.07).cuda() - metrics[0]
 
-                    # loss = self.loss(logits, label)
-                    # total_loss = self.loss(logits, label)
-                    loss_meta = F.cross_entropy(logits, label)
+                # loss = self.loss(logits, label)
+                # total_loss = self.loss(logits, label)
+                loss_meta = F.cross_entropy(logits, label)
 
+                aux_loss = 0
+                if args.balance > 0:
                     aux_loss = F.cross_entropy(logits_simclr, self.model.label_aux)
-                    # print(aux_loss)
+                # print(aux_loss)
 
-                    total_loss = loss_meta + loss_infoNCE_neg + args.balance * aux_loss
+                total_loss = loss_meta + loss_infoNCE_neg + args.balance * aux_loss
                 
                 tl2.add(loss_meta)
                 forward_tm = time.time()
@@ -181,13 +156,11 @@ class FSLTrainer(Trainer):
                         scaled_loss.backward()
                 else:
                     total_loss.backward()
-                # self.model._momentum_update_key_encoder()
 
                 backward_tm = time.time()
                 self.bt.add(backward_tm - forward_tm)
                 
                 self.optimizer.step() 
-
 
                 optimizer_tm = time.time()
                 self.ot.add(optimizer_tm - backward_tm)
