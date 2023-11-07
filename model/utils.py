@@ -235,6 +235,7 @@ def get_command_line_parser():
     parser.add_argument('--wandb_mode', type=str, default='disabled')
 
     parser.add_argument('--return_simclr', type=int, default=None) # number of views in simclr
+    parser.add_argument('--use_infoNCE', action='store_true', default=False) # use infoNCE loss
 
     parser.add_argument('--config', type=str, default=None)
 

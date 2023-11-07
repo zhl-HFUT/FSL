@@ -125,11 +125,6 @@ class FSLTrainer(Trainer):
                 # loss_infoNCE = loss_infoNCE + F.cross_entropy(metrics, label_moco)
                 loss_infoNCE_neg = F.cross_entropy(torch.index_select(metrics, 0, pure_index).unsqueeze(0), label_moco.unsqueeze(0))
                 # loss_sup_con = - (torch.log(torch.exp(torch.index_select(metrics, 0, pos_index)) / metric_exp_sum) * torch.index_select(sims, 0, pos_index)).sum()/weight_sum
-                # print('loss_sup_con:', loss_sup_con.item())
-                # loss_pos = torch.tensor(1.0/0.07).cuda() - metrics[0]
-
-                # loss = self.loss(logits, label)
-                # total_loss = self.loss(logits, label)
                 loss_meta = F.cross_entropy(logits, label)
 
                 aux_loss = 0
@@ -137,7 +132,10 @@ class FSLTrainer(Trainer):
                     aux_loss = F.cross_entropy(logits_simclr, self.model.label_aux)
                 # print(aux_loss)
 
-                total_loss = loss_meta + loss_infoNCE_neg + args.balance * aux_loss
+                total_loss = loss_meta + args.balance * aux_loss
+
+                if args.use_infoNCE:
+                    total_loss += loss_infoNCE_neg
                 
                 tl2.add(loss_meta)
                 forward_tm = time.time()
