@@ -243,7 +243,6 @@ class FEATBaseTransformer2(FewShotModel):
             tx_k_v = hdim
         print('Creating slf_attn with hdim, tx_k_v = ', [hdim, tx_k_v])
         self.slf_attn = MultiHeadAttention(args.n_heads, hdim, tx_k_v, tx_k_v, dropout=0.5)
-        self.self_attn2 = MultiHeadAttention(1, hdim, hdim, hdim, dropout=0.5)
         # proto_dict = None
         # self.fast_query = args.fast_query
         # if args.base_protos==0:

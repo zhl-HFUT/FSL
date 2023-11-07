@@ -52,10 +52,6 @@ class FSLTrainer(Trainer):
         if self.mixed_precision:
             self.model, self.optimizer = amp.initialize(self.model, self.optimizer,
                 opt_level=self.mixed_precision)
-        
-        if args.update_base_embeds:
-            batch_size = 32
-            self.update_loader = get_update_loader(args, batch_size)
 
 
 
@@ -133,10 +129,6 @@ class FSLTrainer(Trainer):
                 if epoch%self.args.update_base_interval==0:
                     print('running base proto update')
                     self.model.update_base_protos()
-            
-            if self.args.update_base_embeds:
-                if self.trlog['max_acc_epoch']==epoch-1 and epoch>=args.patience:
-                    self.model.update_2d_embeds(self.update_loader)
 
             for batch in self.train_loader:
                 self.optimizer.zero_grad()

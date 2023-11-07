@@ -207,7 +207,6 @@ def get_command_line_parser():
     parser.add_argument('--base_wt', type=float, default=None)
     parser.add_argument('--k', type=int, default=None)
     parser.add_argument('--update_base_interval', type=int, default=None)
-    parser.add_argument('--update_base_embeds', type=bool, default=False)
     parser.add_argument('--patience', type=int, default=10) # number of epochs after which base_embeds update will run
     parser.add_argument('--base_protos', type=int, default=1)
 
@@ -299,8 +298,6 @@ def get_command_line_parser():
     parser.add_argument('--embeds_cache_1d', type=str, default=None)
     parser.add_argument('--embeds_cache_2d', type=str, default=None)
     parser.add_argument('--baseinstance_2d_norm', type=str, default=None)
-
-    parser.add_argument('--channel_reduction', type=int, default=None)
 
 
     parser.add_argument('--wandb_mode', type=str, default='disabled')
