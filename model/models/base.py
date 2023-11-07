@@ -112,83 +112,26 @@ class FewShotModel(nn.Module):
                      torch.Tensor(np.arange(args.eval_way*args.eval_shot, args.eval_way * (args.eval_shot + args.eval_query))).long().view(1, args.eval_query, args.eval_way))
 
     
-    def forward(self, x, ids=None,  get_feature=False, simclr_images=None, key_cls=None, return_intermediate=False):
+    def forward(self, x, ids=None, simclr_images=None, key_cls=None):
+        # feature extraction
+        x = x.squeeze(0)
+        instance_embs = self.encoder(x)
+        # split support query set for few-shot data
+        support_idx, query_idx = self.split_instances(x)
+        if simclr_images is not None:
+            n_embs, n_views, n_ch, spatial, _ = simclr_images.shape
+            simclr_images = simclr_images.reshape(-1, n_ch, spatial, spatial)
+            simclr_embs = self.encoder(simclr_images, pool=False)
+            spatial_out = simclr_embs.shape[-1]
+            simclr_embs = simclr_embs.reshape(n_embs, n_views, self.hdim, spatial_out, spatial_out)
 
-        # with autocast():
-            # input sal crop
-        # if self.sal_crop is not None:
-        #     if self.sal_crop == 'saliency_crop2':
-        #         x = get_saliency_crops2(x,
-        #                 use_minmax=False)
-        #     elif self.sal_crop == 'saliency_crop4':
-        #         sal = get_sal(x)
-        #         sal = sal.repeat_interleave(3, dim=1)
-        #         sal = sal*5.4-2.7
-        #         # print('sal shape', [sal.shape, sal.min(), sal.max()])
-        #         self.sal_embs= self.encoder(sal)
-            
-        # print('inside base', [x.shape, x.min(), x.max()])
-        if get_feature:
-            # get feature with the provided embeddings
-            print('inside get_featur/e')
-            return self.encoder(x)
+        if self.training:
+            logits, logits_simclr, metrics, sims, pure_index = self._forward(instance_embs, 
+                support_idx, query_idx, key_cls=key_cls, ids=ids, simclr_embs=simclr_embs)
+            return logits, logits_simclr, metrics, sims, pure_index
         else:
-            # feature extraction
-            x = x.squeeze(0)
-            instance_embs = self.encoder(x)
-            instance_embs_target = self.encoder_target(x)
-            num_inst = instance_embs.shape[0]
-            # split support query set for few-shot data
-            support_idx, query_idx = self.split_instances(x)
-            # print('support and query idx')
-            # print(support_idx)
-            # print(query_idx)
-            simclr_embs=None
-            if simclr_images is not None:
-                n_embs, n_views, n_ch, spatial, _ = simclr_images.shape
-                simclr_images = simclr_images.reshape(-1, n_ch, spatial, spatial)
-                simclr_embs = self.encoder(simclr_images, pool=False)
-                spatial_out = simclr_embs.shape[-1]
-                # print('simclr embs ', [simclr_embs.shape, simclr_embs.min(), simclr_embs.max()])
-
-                simclr_embs = simclr_embs.reshape(n_embs, n_views, self.hdim, spatial_out, spatial_out)
-                # print('simclr embs ', [simclr_embs.shape, simclr_embs.min(), simclr_embs.max()])
-                # print('instance embs ', [instance_embs.shape, instance_embs.min(), instance_embs.max()])
-
-            if return_intermediate:
-                origin_proto, proto, query = self._forward(instance_embs, 
-                        support_idx, query_idx, key_cls=key_cls, ids=ids, simclr_embs=simclr_embs, return_intermediate=return_intermediate)
-                return origin_proto, proto, query
-            if self.args.method == 'proto_net_only':
-                logits, proj_support_mempred, proj_support_target = self._forward(instance_embs, support_idx, query_idx, key_cls=key_cls, ids=ids, simclr_embs=simclr_embs, return_intermediate=False)
-                return logits, proj_support_mempred, proj_support_target
-            if self.args.method == 'proto_FGKVM':
-                if self.training:
-                    logits, kvmpred, kvmtarget = self._forward(instance_embs, support_idx, query_idx, key_cls=key_cls, ids=ids
-                                        , simclr_embs=simclr_embs, return_intermediate=False
-                                        , instance_embs_target=instance_embs_target)
-                    return logits, kvmpred, kvmtarget
-                else:
-                    logits = self._forward(instance_embs, support_idx, query_idx, key_cls=key_cls, ids=ids
-                                        , simclr_embs=simclr_embs, return_intermediate=False
-                                        , instance_embs_target=instance_embs_target)
-                    return logits
-
-            if self.training:
-                if self.args.pass_ids:
-                    logits, logits_simclr, metrics, sims, pure_index = self._forward(instance_embs, 
-                        support_idx, query_idx, key_cls=key_cls, ids=ids, simclr_embs=simclr_embs, return_intermediate=False)
-
-                else:
-                    logits, logits_reg = self._forward(instance_embs, 
-                        support_idx, query_idx, simclr_embs=simclr_embs)
-                return logits, logits_simclr, metrics, sims, pure_index
-            else:
-                if self.args.pass_ids:
-                    logits = self._forward(instance_embs, support_idx, query_idx, ids)
-                else:
-                    logits = self._forward(instance_embs, support_idx, query_idx)
-                return logits
+            logits = self._forward(instance_embs, support_idx, query_idx, ids)
+            return logits
 
     def _forward(self, x, support_idx, query_idx):
         raise NotImplementedError('Suppose to be implemented by subclass')

@@ -242,8 +242,7 @@ class FEATBaseTransformer3_2d(FEATBaseTransformer3):
         return base_protos
 
 
-    def _forward(self, instance_embs, support_idx, query_idx, ids=None, simclr_embs=None, key_cls=None, return_intermediate=False
-                 , instance_embs_target=None):
+    def _forward(self, instance_embs, support_idx, query_idx, ids=None, simclr_embs=None, key_cls=None):
         
         if self.channel_reduction:
             instance_embs = self.channel_reduction(instance_embs)
@@ -271,11 +270,6 @@ class FEATBaseTransformer3_2d(FEATBaseTransformer3):
         n_class = proto.shape[1]
         n_batch = proto.shape[0]
         k = self.args.k
-
-        if self.training and self.args.method == 'PMBT':
-            for i, cls in enumerate(key_cls):
-                # print(cls)
-                self.memory.data[cls] = (1 - 0.99) * self.memory.data[cls] + 0.99 * instance_embs.view(80, 1600)[i::5].mean(dim=0)
 
         # get topk base instances
  
