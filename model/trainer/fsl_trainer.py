@@ -110,7 +110,7 @@ class FSLTrainer(Trainer):
                 data_tm = time.time()
                 self.dt.add(data_tm - start_tm)
                 
-                logits, logits_simclr, metrics, sims, pure_index = self.model(data, ids, simclr_images=data_simclr, key_cls=gt_label[:5])
+                logits, logits_simclr, metrics, sims, pure_index, loss_mem = self.model(data, ids, simclr_images=data_simclr, key_cls=gt_label[:5])
 
                 sims = torch.tensor(sims).cuda()
                 pure_index = torch.tensor(pure_index).cuda()
@@ -136,6 +136,9 @@ class FSLTrainer(Trainer):
 
                 if args.use_infoNCE:
                     total_loss += loss_infoNCE_neg
+                
+                if args.use_memNorm:
+                    total_loss += loss_mem*0.5
                 
                 tl2.add(loss_meta)
                 forward_tm = time.time()

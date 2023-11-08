@@ -268,6 +268,20 @@ class FEATBaseTransformer3_2d(FewShotModel):
             # attention之后的任务特征入队
             self._dequeue_and_enqueue(feat_task_2, key_cls.cpu())
 
+            if self.args.use_memNorm:
+                loss_mem = 0
+                for mem in self.memory:
+                    A = mem.reshape(25, 64)
+                    # print(A)
+                    B = torch.mm(A, A.t()) - torch.eye(A.shape[0]).cuda()
+                    # eigenvalues = torch.linalg.eigvals(torch.matmul(B.t(), B))
+                    eigenvalues = torch.linalg.eigvals(B)
+                    max_eigenvalue = torch.max(torch.real(eigenvalues))
+                    # loss_mem += torch.sqrt(max_eigenvalue)
+                    loss_mem += max_eigenvalue
+                print(loss_mem)
+                # print(logits)
+
         # simclr logits部分
         if self.training:
             if  simclr_embs is not None:
@@ -278,7 +292,7 @@ class FEATBaseTransformer3_2d(FewShotModel):
                 return logits, logits_simclr, metrics, sims, pure_index
             # 训练时在这里return
             if self.args.balance==0:
-                return logits, None, metrics, sims, pure_index         
+                return logits, None, metrics, sims, pure_index, loss_mem
         # 测试时在这里return
         else:
             return logits

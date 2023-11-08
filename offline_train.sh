@@ -1,1 +1,1 @@
-python train_fsl.py  --backbone_class ConvNet --shot 1 --eval_shot 1 --balance 0.0 --temperature 0.1 --temperature2 0.1 --lr 0.0001 --step_size 20 --orig_imsize 128 --wandb_mode disabled --z_norm before_tx --mixed_precision O2
+python train_fsl.py  --backbone_class ConvNet --shot 1 --eval_shot 1 --balance 0.0 --temperature 0.1 --temperature2 0.1 --lr 0.0001 --step_size 20 --orig_imsize 128 --wandb_mode disabled --z_norm before_tx --mixed_precision O2 --use_infoNCE

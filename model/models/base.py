@@ -88,9 +88,9 @@ class FewShotModel(nn.Module):
             simclr_embs = simclr_embs.reshape(n_embs, n_views, self.hdim, spatial_out, spatial_out)
 
         if self.training:
-            logits, logits_simclr, metrics, sims, pure_index = self._forward(instance_embs, 
+            logits, logits_simclr, metrics, sims, pure_index, loss_mem = self._forward(instance_embs, 
                 support_idx, query_idx, key_cls=key_cls, ids=ids, simclr_embs=simclr_embs)
-            return logits, logits_simclr, metrics, sims, pure_index
+            return logits, logits_simclr, metrics, sims, pure_index, loss_mem
         else:
             logits = self._forward(instance_embs, support_idx, query_idx, ids)
             return logits
