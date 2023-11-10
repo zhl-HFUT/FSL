@@ -47,15 +47,25 @@ def get_parser():
     args.mixed_precision = 'O2'
     args.z_norm = 'before_tx'
 
-    return args
+    return postprocess_args(args)
 
 
 def get_trainer(args):
-    args = postprocess_args(args)
     set_gpu(args.gpu)
     trainer = FSLTrainer(args)
 
     return trainer
+
+def get_ordered_loader(args, data_set):
+    from model.dataloader.mini_imagenet import MiniImageNet as Dataset
+    from torch.utils.data import DataLoader
+    trainset = Dataset(data_set, args, augment=False, return_id=bool(args.pass_ids), return_simclr=args.return_simclr)
+    train_loader = DataLoader(dataset=trainset,
+                                  num_workers=args.num_workers,
+                                  shuffle=False,
+                                  pin_memory=True)
+
+    return train_loader
 
 def custom_test(trainer, args, num_tasks=10000):
     import torch.nn as nn
