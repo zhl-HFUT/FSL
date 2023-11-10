@@ -4,6 +4,7 @@ embeds_cache/
 wandb/
 *.txt
 *.ipynb
+embs.pth
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

@@ -33,6 +33,7 @@
                 "O2",
                 "--z_norm",
                 "before_tx",
+                "--use_infoNCE"
             ]
         },
         {

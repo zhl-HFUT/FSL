@@ -5,6 +5,11 @@ import torch.nn.functional as F
 import torch.nn as nn
 import random
 
+def custom_normal(memorys):
+    means = memorys[:, :, :, 0]
+    stds = memorys[:, :, :, 1] * 0.33
+    return torch.normal(means, stds)
+
 class ScaledDotProductAttention(nn.Module):
     ''' Scaled Dot-Product Attention '''
 
@@ -208,10 +213,10 @@ class FEATBaseTransformer3_2d(FewShotModel):
         if self.training:
             self.wordnet_sim_labels['n0461250400'][4] = random.choice([21, 49, 52, 40])
             top_indices = np.stack([self.wordnet_sim_labels[id_[:11]] for id_ in ids[:5]], axis=0)
-            base_protos = self.memory[torch.Tensor(top_indices).long()].reshape(n_class, n_simcls, emb_dim, spatial_dim, spatial_dim)
+            base_protos = custom_normal(self.memory[torch.Tensor(top_indices).long()]).reshape(n_class, n_simcls, emb_dim, spatial_dim, spatial_dim)
         else:
             top_indices = np.stack([self.wordnet_sim_labels[id_[:11]] for id_ in ids[:5]], axis=0)
-            base_protos = self.memory[torch.Tensor(top_indices).long()].reshape(n_class, n_simcls, emb_dim, spatial_dim, spatial_dim)
+            base_protos = self.memory[torch.Tensor(top_indices).long()][:, :, :, 0].reshape(n_class, n_simcls, emb_dim, spatial_dim, spatial_dim)
 
         if self.baseinstance_2d_norm:
             base_protos = base_protos.reshape(n_class*n_simcls, emb_dim, spatial_dim, spatial_dim)
