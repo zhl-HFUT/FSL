@@ -219,7 +219,8 @@ def get_command_line_parser():
     parser.add_argument('--weight_decay', type=float, default=0.0005) # we find this weight decay value works the best
     parser.add_argument('--num_workers', type=int, default=4)
     parser.add_argument('--log_interval', type=int, default=100)
-    parser.add_argument('--eval_interval', type=int, default=1)
+    parser.add_argument('--minitest_interval', type=int, default=1)
+    parser.add_argument('--test100k_interval', type=int, default=1)
     parser.add_argument('--save_dir', type=str, default='./checkpoints')
 
     # test checkpoint

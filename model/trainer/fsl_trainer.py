@@ -174,7 +174,7 @@ class FSLTrainer(Trainer):
             # print(tca.item())
             self.try_evaluate(epoch)
             self.save_model('epoch-last')
-            if self.train_epoch%20 == 0:
+            if self.train_epoch%args.test100k_interval == 0:
                 self.evaluate_test('epoch-last.pth', specified_epoch=self.train_epoch)
 
             print('ETA:{}/{}'.format(
@@ -198,7 +198,7 @@ class FSLTrainer(Trainer):
         label = label.type(torch.LongTensor)
         if torch.cuda.is_available():
             label = label.cuda()
-        print('best epoch {}, best test600 acc={:.4f} + {:.4f}'.format(
+        print('best epoch {}, best mini_test acc={:.4f} + {:.4f}'.format(
                 self.trlog['max_acc_epoch'],
                 self.trlog['max_acc'],
                 self.trlog['max_acc_interval']))
@@ -334,7 +334,7 @@ class FSLTrainer(Trainer):
             self.trlog['test_acc_interval'] = vap
             self.trlog['test_loss'] = vl
             epoch = self.trlog['max_acc_epoch']
-            print('Epoch{} test600 acc={:.4f} + {:.4f}\n'.format(
+            print('Epoch{} mini_test acc={:.4f} + {:.4f}\n'.format(
                     epoch,
                     self.trlog['max_acc'],
                     self.trlog['max_acc_interval']))
@@ -345,7 +345,7 @@ class FSLTrainer(Trainer):
             epoch = self.args.max_epoch
             if specified_epoch:
                 epoch = specified_epoch
-            print('Epoch{} test600 acc={:.4f} + {:.4f}\n'.format(
+            print('Epoch{} mini_test acc={:.4f} + {:.4f}\n'.format(
                     epoch,
                     self.trlog['final_val_acc'],
                     self.trlog['final_val_acc_interval']))
@@ -354,7 +354,7 @@ class FSLTrainer(Trainer):
         #         self.trlog['max_acc_epoch'],
         #         self.trlog['max_acc'],
         #         self.trlog['max_acc_interval']))
-        print('Epoch{} Test10000 acc={:.4f} + {:.4f}\n'.format(
+        print('Epoch{} test_100k acc={:.4f} + {:.4f}\n'.format(
                 epoch,
                 va,
                 vap))
