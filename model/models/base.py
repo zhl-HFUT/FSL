@@ -38,7 +38,7 @@ class FewShotModel(nn.Module):
         # classes of task in quene
         self.classes = np.ones((self.K, 5), dtype=int)*1000
 
-        self.memory = nn.Parameter(torch.load('/BaseTransformers/mean_std.pth'))
+        self.memory = nn.Parameter(torch.load('mean_std.pth'))
 
         if args.backbone_class == 'ConvNet':
             from model.networks.convnet import ConvNet
