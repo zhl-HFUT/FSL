@@ -1,48 +1,17 @@
 import torch
-import torch.nn as nn
-import numpy as np
 import torch.optim as optim
 from torch.utils.data import DataLoader
-from model.dataloader.samplers import CategoriesSampler, RandomSampler, ClassSampler
+from model.dataloader.samplers import CategoriesSampler
 from model.models.feat_basetransformer3_2d import FEATBaseTransformer3_2d
-
-class MultiGPUDataloader:
-    def __init__(self, dataloader, num_device):
-        self.dataloader = dataloader
-        self.num_device = num_device
-
-    def __len__(self):
-        return len(self.dataloader) // self.num_device
-
-    def __iter__(self):
-        data_iter = iter(self.dataloader)
-        done = False
-
-        while not done:
-            try:
-                output_batch = ([], [])
-                for _ in range(self.num_device):
-                    batch = next(data_iter)
-                    for i, v in enumerate(batch):
-                        output_batch[i].append(v[None])
-                
-                yield ( torch.cat(_, dim=0) for _ in output_batch )
-            except StopIteration:
-                done = True
-        return
 
 def get_dataloader(args):
     if args.dataset == 'MiniImageNet':
-        # Handle MiniImageNet
         from model.dataloader.mini_imagenet import MiniImageNet as Dataset
-    else:
-        raise ValueError('Non-supported Dataset.')
 
     num_episodes = args.episodes_per_epoch
     num_workers = args.num_workers
-    # print('args.pass_ids', bool(args.pass_ids))
     trainset = Dataset('train', args, augment=False, 
-        return_id=bool(args.pass_ids), return_simclr=args.return_simclr)
+        return_id=True, return_simclr=args.return_simclr)
     # ids to be passed to prevent base examples from the class of support instance not be considered 
     # by transformer.
     args.num_class = trainset.num_class
@@ -56,24 +25,19 @@ def get_dataloader(args):
                                   batch_sampler=train_sampler,
                                   pin_memory=True)
 
-    #if args.multi_gpu and num_device > 1:
-        #train_loader = MultiGPUDataloader(train_loader, num_device)
-        #args.way = args.way * num_device
-
-    valset = Dataset('val', args, return_id=bool(args.pass_ids)) 
+    valset = Dataset('val', args, return_id=True) 
     val_sampler = CategoriesSampler(valset.label,
                             args.num_eval_episodes,
-                            args.eval_way, args.eval_shot + args.eval_query)
+                            args.way, args.shot + args.query)
     val_loader = DataLoader(dataset=valset,
                             batch_sampler=val_sampler,
                             num_workers=args.num_workers,
                             pin_memory=True)
     
-    
-    testset = Dataset('test', args, return_id=bool(args.pass_ids))
+    testset = Dataset('test', args, return_id=True)
     test_sampler = CategoriesSampler(testset.label,
                             10000, # args.num_eval_episodes,
-                            args.eval_way, args.eval_shot + args.eval_query)
+                            args.way, args.shot + args.query)
     test_loader = DataLoader(dataset=testset,
                             batch_sampler=test_sampler,
                             num_workers=args.num_workers,
@@ -112,10 +76,6 @@ def prepare_model(args):
 
         # print('model dict keys', model_dict.keys())
         print('loading state dict', model.load_state_dict(model_dict))
-        # asd
-        # asd
-        # print('succesfully updaed')
-        # asd
 
     if torch.cuda.is_available():
         torch.backends.cudnn.benchmark = True

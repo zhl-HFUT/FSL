@@ -1,1 +1,0 @@
-python train_fsl.py --backbone_class Res12 --shot 1 --eval_shot 1 --temperature 0.1 --temperature2 0.1 --lr 0.0002 --step_size 40 --orig_imsize 128 --baseinstance_2d_norm True --wandb_mode disabled --z_norm before_tx --mixed_precision O2 --return_simclr 2 --balance 0.1

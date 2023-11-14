@@ -13,12 +13,7 @@ import torch
 import torch.nn.functional as F
 
 from model.trainer.base import Trainer
-from model.utils import (
-    pprint, ensure_path,
-    Averager, Timer, count_acc, one_hot,
-    compute_confidence_interval,
-    AccuracyClassAverager
-)
+from model.utils import count_acc, compute_confidence_interval
 from tqdm import tqdm
 from shutil import copyfile
 from json2html import *
@@ -59,7 +54,7 @@ def get_trainer(args):
 def get_ordered_loader(args, data_set):
     from model.dataloader.mini_imagenet import MiniImageNet as Dataset
     from torch.utils.data import DataLoader
-    trainset = Dataset(data_set, args, augment=False, return_id=bool(args.pass_ids), return_simclr=args.return_simclr)
+    trainset = Dataset(data_set, args, augment=False, return_id=True, return_simclr=args.return_simclr)
     train_loader = DataLoader(dataset=trainset,
                                   num_workers=args.num_workers,
                                   shuffle=False,

@@ -3,7 +3,6 @@ import torch.nn.functional as F
 from torch import nn
 from torch.distributions import Bernoulli
 
-
 class DropBlock(nn.Module):
     def __init__(self, block_size):
         super(DropBlock, self).__init__()

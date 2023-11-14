@@ -1,7 +1,6 @@
 import torch
 import torch.nn as nn
 import numpy as np
-import sys
 
 class BidirectionalLSTM(nn.Module):
     def __init__(self, layer_sizes, batch_size, vector_dim):
@@ -24,7 +23,7 @@ class BidirectionalLSTM(nn.Module):
         return output, hn, cn
 
 class FewShotModel(nn.Module):
-    def __init__(self, args, resize=True, max_pool='max_pool'):
+    def __init__(self, args):
         super().__init__()
         self.args = args
 
@@ -36,7 +35,7 @@ class FewShotModel(nn.Module):
         self.queue = nn.functional.normalize(self.queue, dim=1)
         self.register_buffer("queue_ptr", torch.zeros(1, dtype=torch.long))
         # classes of task in quene
-        self.classes = np.ones((self.K, 5), dtype=int)*1000
+        self.classes = np.ones((self.K, args.way), dtype=int)*1000
 
         self.memory = nn.Parameter(torch.load(args.mean_std))
 
@@ -69,8 +68,8 @@ class FewShotModel(nn.Module):
             return  (torch.Tensor(np.arange(args.way*args.shot)).long().view(1, args.shot, args.way), 
                      torch.Tensor(np.arange(args.way*args.shot, args.way * (args.shot + args.query))).long().view(1, args.query, args.way))
         else:
-            return  (torch.Tensor(np.arange(args.eval_way*args.eval_shot)).long().view(1, args.eval_shot, args.eval_way), 
-                     torch.Tensor(np.arange(args.eval_way*args.eval_shot, args.eval_way * (args.eval_shot + args.eval_query))).long().view(1, args.eval_query, args.eval_way))
+            return  (torch.Tensor(np.arange(args.way*args.shot)).long().view(1, args.shot, args.way), 
+                     torch.Tensor(np.arange(args.way*args.shot, args.way * (args.shot + args.query))).long().view(1, args.query, args.way))
 
     
     def forward(self, x, ids=None, simclr_images=None, key_cls=None):

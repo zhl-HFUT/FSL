@@ -12,7 +12,6 @@ def conv3x3(in_planes, out_planes, stride=1):
     return nn.Conv2d(in_planes, out_planes, kernel_size=3, stride=stride,
                      padding=1, bias=False)
 
-
 class BasicBlock(nn.Module):
     expansion = 1
 
@@ -71,7 +70,6 @@ class BasicBlock(nn.Module):
 
         return out
 
-
 class ResNet(nn.Module):
 
     def __init__(self, block=BasicBlock, keep_prob=1.0, avg_pool=True, 
@@ -112,22 +110,13 @@ class ResNet(nn.Module):
         return nn.Sequential(*layers)
 
     def forward(self, x):
-        # print('here ', [type(x.detach().cpu().numpy()[0,0,0,0]), x.shape, x[0,0,0,0]])
-        
         x = self.layer1(x)
         x = self.layer2(x)
-        # print('here, after layer2 ', [type(x.detach().cpu().numpy()[0,0,0,0]), x.shape, x[0,0,0,0]])
-       
         x = self.layer3(x)
-        # print('here ', [type(x.detach().cpu().numpy()[0,0,0,0]), x.shape, x[0,0,0,0]])
-        # asd
         x = self.layer4(x)
-        # print('before avg pool ', x.shape)
         if self.keep_avg_pool:
             x = self.avgpool(x)
-        # print('after avg pool ', x.shape)
         return x
-
 
 def Res12(keep_prob=1.0, avg_pool=False, **kwargs):
     """Constructs a ResNet-12 model.
