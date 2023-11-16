@@ -88,9 +88,9 @@ def get_command_line_parser():
     parser.add_argument('--use_infoNCE', action='store_true', default=False) # use infoNCE loss
     parser.add_argument('--n_heads', type=int, default=1) # self-attention heads
     parser.add_argument('--baseinstance_2d_norm', type=str, default=None)
-    parser.add_argument('--z_norm', type=str, default=None, 
+    parser.add_argument('--z_norm', type=str, default='before_tx', 
                         choices=['before_tx', 'before_euclidian', 'both', None])
-    parser.add_argument('--balance', type=float, default=0)
+    parser.add_argument('--balance', type=float, default=0.0)
     parser.add_argument('--temperature', type=float, default=0.1)
     parser.add_argument('--temperature2', type=float, default=0.1)
 
@@ -99,7 +99,7 @@ def get_command_line_parser():
     parser.add_argument('--save_dir', type=str, default='./checkpoints')
     parser.add_argument('--log_interval', type=int, default=100)
     parser.add_argument('--minitest_interval', type=int, default=1)
-    parser.add_argument('--test100k_interval', type=int, default=20)
+    parser.add_argument('--test100k_interval', type=int, default=100)
     
     # 模型
     parser.add_argument('--model_class', type=str, default='FEATBaseTransformer3_2d', 

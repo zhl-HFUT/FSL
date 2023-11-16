@@ -1,9 +1,9 @@
 checkpoints/
-embeds_cache/
-.cache/*.pt
+files/*.pt
 wandb/
 *.txt
 *.ipynb
+nb_utils.py
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
