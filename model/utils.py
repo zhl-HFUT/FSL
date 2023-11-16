@@ -91,8 +91,8 @@ def get_command_line_parser():
     parser.add_argument('--z_norm', type=str, default=None, 
                         choices=['before_tx', 'before_euclidian', 'both', None])
     parser.add_argument('--balance', type=float, default=0)
-    parser.add_argument('--temperature', type=float, default=1)
-    parser.add_argument('--temperature2', type=float, default=1)
+    parser.add_argument('--temperature', type=float, default=0.1)
+    parser.add_argument('--temperature2', type=float, default=0.1)
 
     # 测试，记录相关
     parser.add_argument('--wandb_mode', type=str, default='disabled')
