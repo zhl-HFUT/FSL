@@ -5,7 +5,7 @@ from model.trainer.base import Trainer
 from model.trainer.helpers import (
     get_dataloader, prepare_model, prepare_optimizer
 )
-from model.utils import Averager, count_acc
+from model.utils import count_acc
 from apex import amp
 
 class FSLTrainer(Trainer):
@@ -29,11 +29,6 @@ class FSLTrainer(Trainer):
         for epoch in range(1, args.max_epoch + 1):
             self.train_epoch += 1
             self.model.train()
-            
-            tl1 = Averager()
-            tl2 = Averager()
-            ta = Averager()
-
             for batch in self.train_loader:
                 self.optimizer.zero_grad()
                 self.train_step += 1
@@ -70,11 +65,8 @@ class FSLTrainer(Trainer):
                     
                     total_loss += loss_infoNCE_neg
                 
-                tl2.add(loss_meta)
                 acc = count_acc(logits, label)
 
-                tl1.add(total_loss.item())
-                ta.add(acc)
                 if self.mixed_precision:
                     with amp.scale_loss(total_loss, self.optimizer) as scaled_loss:
                         scaled_loss.backward()
