@@ -21,23 +21,11 @@ if __name__ == '__main__':
 
     set_gpu(args.gpu)
 
-    if args.backbone_class == 'ConvNet':
-        args.init_weights = './files/mini_conv4_ver11_113120.pth'
-        args.mean_std = './files/mean_std_conv4.pth'
-        args.dim_model = 64
-        args.dim_hn = 256
-    elif args.backbone_class == 'Res12':
-        args.init_weights = './files/mini_r12_ver2_corrected_140403.pth'
-        args.mean_std = './files/mean_std_res12.pth'
-        args.dim_model = 640
-        args.dim_hn = 256
-
     pprint(vars(args))
 
     trainer = FSLTrainer(args)
 
     trainer.train()
     if args.test100k_interval != 1:
-        trainer.evaluate_test('max_acc.pth')
-    trainer.final_record()
+        trainer.test_100k('max_acc.pth')
     print(args.save_path)

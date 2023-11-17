@@ -59,24 +59,16 @@ def compute_confidence_interval(data):
     pm = 1.96 * (std / np.sqrt(len(a)))
     return m, pm
 
-def postprocess_args(args):            
-    args.num_classes = args.way
-    save_path1 = '-'.join([args.dataset, args.model_class, args.backbone_class, '{:02d}w{:02d}s{:02}q'.format(args.way, args.shot, args.query)])
-    save_path2 = '_'.join([str('_'.join(args.step_size.split(','))), str(args.gamma),
-                           'lr{:.2g}mul{:.2g}'.format(args.lr, args.lr_mul),
-                           str(args.lr_scheduler), 
-                           'T1{}T2{}'.format(args.temperature, args.temperature2),
-                           'b{}'.format(args.balance),
-                           'bsz{:03d}'.format( max(args.way, args.num_classes)*(args.shot+args.query) )
-                           ])    
-    save_path1 += '-Pre'
-    save_path1 += '-DIS'
-
-    save_path2 += '_{}'.format(str(time.strftime('%Y%m%d_%H%M%S')))
-
-    if not os.path.exists(os.path.join(args.save_dir, save_path1)):
-        os.mkdir(os.path.join(args.save_dir, save_path1))
-    args.save_path = os.path.join(args.save_dir, save_path1, save_path2)
+def postprocess_args(args):
+    if args.backbone_class == 'ConvNet':
+        args.init_weights = './files/mini_conv4_ver11_113120.pth'
+        args.mean_std = './files/mean_std_conv4.pth'
+        args.dim_model = 64
+    elif args.backbone_class == 'Res12':
+        args.init_weights = './files/mini_r12_ver2_corrected_140403.pth'
+        args.mean_std = './files/mean_std_res12.pth'
+        args.dim_model = 640
+    args.save_path = 'checkpoints/' + '_{}'.format(str(time.strftime('%Y%m%d_%H%M%S', time.localtime())))
     os.mkdir(args.save_path)
     return args
 
@@ -85,21 +77,34 @@ def get_command_line_parser():
 
     # 创新点相关
     parser.add_argument('--return_simclr', type=int, default=None) # number of views in simclr
+    parser.add_argument('--balance', type=float, default=0.0)
+
     parser.add_argument('--use_infoNCE', action='store_true', default=False) # use infoNCE loss
+    parser.add_argument('--T', type=float, default=0.07) # temperature for infoNCE loss
+    parser.add_argument('--K', type=int, default=256) # number of negative samples for infoNCE loss
+    parser.add_argument('--D', type=int, default=256)
+    parser.add_argument('--M', type=float, default=0.99) # 没用
+
+    parser.add_argument('--mem_init', type=str, default='pre_train', choices=['pre_train', 'random'])
+    parser.add_argument('--std_weight', type=float, default=None) # 采样的方差权重；None即直接取均值
+    parser.add_argument('--grad_mem', action='store_true', default=False) # memory是否可学习, False进行detach
+
     parser.add_argument('--n_heads', type=int, default=1) # self-attention heads
+
     parser.add_argument('--baseinstance_2d_norm', type=str, default=None)
     parser.add_argument('--z_norm', type=str, default='before_tx', 
                         choices=['before_tx', 'before_euclidian', 'both', None])
-    parser.add_argument('--balance', type=float, default=0.0)
+    
     parser.add_argument('--temperature', type=float, default=0.1)
     parser.add_argument('--temperature2', type=float, default=0.1)
 
-    # 测试，记录相关
-    parser.add_argument('--wandb_mode', type=str, default='disabled')
-    parser.add_argument('--save_dir', type=str, default='./checkpoints')
+    # 训练，测试，记录相关
+    parser.add_argument('--max_epoch', type=int, default=200)
+    parser.add_argument('--episodes_per_epoch', type=int, default=100)
+    parser.add_argument('--num_eval_episodes', type=int, default=600)
     parser.add_argument('--log_interval', type=int, default=100)
     parser.add_argument('--minitest_interval', type=int, default=1)
-    parser.add_argument('--test100k_interval', type=int, default=100)
+    parser.add_argument('--test100k_interval', type=int, default=20)
     
     # 模型
     parser.add_argument('--model_class', type=str, default='FEATBaseTransformer3_2d', 
@@ -111,9 +116,6 @@ def get_command_line_parser():
     parser.add_argument('--query', type=int, default=15)
     
     # 数据集
-    parser.add_argument('--max_epoch', type=int, default=200)
-    parser.add_argument('--episodes_per_epoch', type=int, default=100)
-    parser.add_argument('--num_eval_episodes', type=int, default=600)
     parser.add_argument('--dataset', type=str, default='MiniImageNet',
                         choices=['MiniImageNet', 'TieredImageNet', 'TieredImageNet_og', 'CUB'])
     # 这里的resize分两步，先128再84，不知道为什么

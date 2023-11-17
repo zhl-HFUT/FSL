@@ -5,9 +5,9 @@ import torch.nn.functional as F
 import torch.nn as nn
 import random
 
-def custom_normal(memorys):
+def custom_normal(memorys, weights):
     means = memorys[:, :, :, 0]
-    stds = memorys[:, :, :, 1] * 0.33
+    stds = memorys[:, :, :, 1] * weights
     return torch.normal(means, stds)
 
 class ScaledDotProductAttention(nn.Module):
@@ -183,7 +183,12 @@ class FEATBaseTransformer3_2d(FewShotModel):
         if self.training:
             self.wordnet_sim_labels['n0461250400'][4] = random.choice([21, 49, 52, 40])
             top_indices = np.stack([self.wordnet_sim_labels[id_[:11]] for id_ in ids[:5]], axis=0)
-            base_protos = custom_normal(self.memory[torch.Tensor(top_indices).long()]).reshape(n_class, n_simcls, emb_dim, spatial_dim, spatial_dim)
+            if self.args.std_weight is not None:
+                base_protos = custom_normal(self.memory[torch.Tensor(top_indices).long()], self.args.std_weight).reshape(n_class, n_simcls, emb_dim, spatial_dim, spatial_dim)
+            else:
+                base_protos = self.memory[torch.Tensor(top_indices).long()][:, :, :, 0].reshape(n_class, n_simcls, emb_dim, spatial_dim, spatial_dim)
+            if self.args.grad_mem is False:
+                base_protos = base_protos.detach()
         else:
             top_indices = np.stack([self.wordnet_sim_labels[id_[:11]] for id_ in ids[:5]], axis=0)
             base_protos = self.memory[torch.Tensor(top_indices).long()][:, :, :, 0].reshape(n_class, n_simcls, emb_dim, spatial_dim, spatial_dim)
@@ -200,7 +205,7 @@ class FEATBaseTransformer3_2d(FewShotModel):
             base_protos = base_protos.reshape(n_class, n_simcls, emb_dim, spatial_dim, spatial_dim)
             proto = proto.reshape(n_batch, n_class, emb_dim, spatial_dim, spatial_dim)
 
-        origin_proto = proto.view(n_class, 1, emb_dim*spatial_dim*spatial_dim).contiguous()
+        origin_proto = proto.reshape(n_class, 1, emb_dim*spatial_dim*spatial_dim)
 
         proto = proto.view(n_class, emb_dim, spatial_dim*spatial_dim).permute(0, 2, 1).contiguous()
         combined_bases = base_protos.permute(0, 1, 3, 4, 2).reshape(n_class, n_simcls*spatial_dim*spatial_dim, emb_dim).contiguous() # 5,125,64

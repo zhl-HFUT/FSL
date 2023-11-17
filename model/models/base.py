@@ -17,8 +17,8 @@ class BidirectionalLSTM(nn.Module):
                             bidirectional=True)
 
     def forward(self, inputs):
-        c0 = torch.rand(self.lstm.num_layers*2, self.batch_size, self.lstm.hidden_size, requires_grad=False).cuda().half()
-        h0 = torch.rand(self.lstm.num_layers*2, self.batch_size, self.lstm.hidden_size, requires_grad=False).cuda().half()
+        c0 = torch.rand(self.lstm.num_layers*2, self.batch_size, self.lstm.hidden_size, requires_grad=False).cuda()
+        h0 = torch.rand(self.lstm.num_layers*2, self.batch_size, self.lstm.hidden_size, requires_grad=False).cuda()
         output, (hn, cn) = self.lstm(inputs, (h0, c0))
         return output, hn, cn
 
@@ -27,17 +27,20 @@ class FewShotModel(nn.Module):
         super().__init__()
         self.args = args
 
-        self.lstm = BidirectionalLSTM(layer_sizes=[args.dim_hn], batch_size=1, vector_dim = args.dim_model*25)
-        self.K = 256
-        self.m = 0.99
-        self.T = 0.07
-        self.register_buffer("queue", torch.randn(self.K, args.dim_hn))
+        self.lstm = BidirectionalLSTM(layer_sizes=[args.D], batch_size=1, vector_dim = args.dim_model*25)
+        self.K = args.K
+        self.m = args.M
+        self.T = args.T
+        self.register_buffer("queue", torch.randn(self.K, args.D))
         self.queue = nn.functional.normalize(self.queue, dim=1)
         self.register_buffer("queue_ptr", torch.zeros(1, dtype=torch.long))
         # classes of task in quene
         self.classes = np.ones((self.K, args.way), dtype=int)*1000
 
-        self.memory = nn.Parameter(torch.load(args.mean_std))
+        if args.mem_init == 'random':
+            self.memory = nn.Parameter(torch.randn(64, args.dim_model*25, 2))
+        elif args.mem_init =='pre_train':
+            self.memory = nn.Parameter(torch.load(args.mean_std))
 
         if args.backbone_class == 'ConvNet':
             from model.networks.convnet import ConvNet

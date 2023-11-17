@@ -6,7 +6,6 @@ from model.trainer.helpers import (
     get_dataloader, prepare_model, prepare_optimizer
 )
 from model.utils import count_acc
-from apex import amp
 
 class FSLTrainer(Trainer):
     def __init__(self, args):
@@ -15,14 +14,9 @@ class FSLTrainer(Trainer):
         self.train_loader, self.val_loader, self.test_loader = get_dataloader(args)
         self.model = prepare_model(args)
         self.optimizer, self.lr_scheduler = prepare_optimizer(self.model, args)
-        self.mixed_precision = args.mixed_precision
-        if self.mixed_precision:
-            self.model, self.optimizer = amp.initialize(self.model, self.optimizer,
-                opt_level=self.mixed_precision)
 
     def train(self):
         args = self.args
-        print('Using mixed precision with opt level = ', self.mixed_precision)
         
         label, label_aux = self.prepare_label()
 
@@ -42,12 +36,13 @@ class FSLTrainer(Trainer):
                 logits, logits_simclr, metrics, sims, pure_index = self.model(data, 
                         ids, simclr_images=data_simclr, key_cls=gt_label[:args.way])
                 loss_meta = F.cross_entropy(logits, label)
-                total_loss = loss_meta
+                total_loss = F.cross_entropy(logits, label)
 
                 if args.balance > 0:
                     aux_loss = F.cross_entropy(logits_simclr, self.model.label_aux)
                     total_loss += args.balance * aux_loss
 
+                loss_infoNCE_neg = torch.tensor(0).cuda()
                 if args.use_infoNCE:
                     sims = torch.tensor(sims).cuda()
                     pure_index = torch.tensor(pure_index).cuda()
@@ -67,16 +62,12 @@ class FSLTrainer(Trainer):
                 
                 acc = count_acc(logits, label)
 
-                if self.mixed_precision:
-                    with amp.scale_loss(total_loss, self.optimizer) as scaled_loss:
-                        scaled_loss.backward()
-                else:
-                    total_loss.backward()
+                total_loss.backward()
 
                 self.optimizer.step() 
                 
             self.lr_scheduler.step()
-            self.logging(total_loss, loss_meta, acc)
+            self.logging(total_loss, loss_meta, loss_infoNCE_neg, acc)
             self.mini_test()
             self.save_model('epoch-last')
             if self.train_epoch%args.test100k_interval == 0:

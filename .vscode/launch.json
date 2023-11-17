@@ -13,10 +13,6 @@
                 "ConvNet",
                 "--shot",
                 "1",
-                "--wandb_mode",
-                "disabled",
-                "--mixed_precision",
-                "O2",
                 "--use_infoNCE"
             ]
         },

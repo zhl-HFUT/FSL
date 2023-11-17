@@ -17,7 +17,7 @@ def get_dataloader(args):
     args.num_class = trainset.num_class
     train_sampler = CategoriesSampler(trainset.label,
                                       num_episodes,
-                                      max(args.way, args.num_classes),
+                                      args.way,
                                       args.shot + args.query)
 
     train_loader = DataLoader(dataset=trainset,

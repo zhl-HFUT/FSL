@@ -6,18 +6,13 @@ import numpy as np
 import torch.nn.functional as F
 
 from model.utils import count_acc, compute_confidence_interval
-import wandb
 from tqdm import tqdm
-from apex import amp
 
 from model.utils import Timer
 
 class Trainer(object, metaclass=abc.ABCMeta):
     def __init__(self, args):
         self.args = args
-        print('Initializing wandb run ')
-        self.wandb_run = wandb.init(project='BaseTransformer', config=self.args, 
-            reinit=False, mode=args.wandb_mode)
         self.save_path = args.save_path
         self.train_step = 0
         self.train_epoch = 0
@@ -37,21 +32,17 @@ class Trainer(object, metaclass=abc.ABCMeta):
         label_aux = label_aux.type(torch.LongTensor).cuda()
         return label, label_aux
 
-    def logging(self, tl1, tl2, ta):
-        print('epoch {}, train {:06g}/{:06g}, total loss={:.4f}, loss={:.4f} acc={:.4f}, lr={:.4g}'
+    def logging(self, total_loss, loss_meta, loss_infoNCE_neg, acc):
+        print('epoch {}, train {:06g}/{:06g}, loss={:.4f}, meta={:.4f}, NCE={:.4f} acc={:.4f}, lr={:.4g}'
                 .format(self.train_epoch,
                         self.train_step,
                         self.max_steps,
-                        tl1.item(), tl2.item(), ta,
+                        total_loss.item(), loss_meta.item(), loss_infoNCE_neg.item(), acc,
                         self.optimizer.param_groups[0]['lr']))
 
     def save_model(self, name):
         import os.path as osp
-        if self.mixed_precision is not None:
-            save_dict = dict(params=self.model.state_dict(),
-            amp=amp.state_dict())
-        else:
-            save_dict = dict(params=self.model.state_dict())
+        save_dict = dict(params=self.model.state_dict())
         torch.save(save_dict, osp.join(self.args.save_path, name + '.pth'))
 
     def load_model(self):
@@ -60,9 +51,6 @@ class Trainer(object, metaclass=abc.ABCMeta):
         print('setting state dict of model to {}'.format(path))
         checkpoint = torch.load(path)
         self.model.load_state_dict(checkpoint['params'])
-        if self.mixed_precision is not None:
-            print('setting amp state dict ')
-            amp.load_state_dict(checkpoint['amp'])
     
     def mini_test(self):
         self.model.eval()
