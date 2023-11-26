@@ -1,6 +1,7 @@
 checkpoints/
 files/*.pt
 wandb/
+files/
 *.txt
 *.ipynb
 nb_utils.py
