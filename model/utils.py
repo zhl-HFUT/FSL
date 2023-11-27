@@ -68,7 +68,10 @@ def postprocess_args(args):
         args.init_weights = './files/mini_r12_ver2_corrected_140403.pth'
         args.mean_std = './files/mean_std_res12.pth'
         args.dim_model = 640
-    args.save_path = 'checkpoints/' + '_{}'.format(str(time.strftime('%Y%m%d_%H%M%S', time.localtime())))
+    if os.path.exists('/output'):
+        args.save_path = '/output/' + '_{}'.format(str(time.strftime('%Y%m%d_%H%M%S', time.localtime())))
+    else:
+        args.save_path = 'checkpoints/' + '_{}'.format(str(time.strftime('%Y%m%d_%H%M%S', time.localtime())))
     os.mkdir(args.save_path)
     return args
 
