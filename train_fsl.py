@@ -26,6 +26,3 @@ if __name__ == '__main__':
     trainer = FSLTrainer(args)
 
     trainer.train()
-    if args.test100k_interval != 1:
-        trainer.test_100k('max_acc.pth')
-    print(args.save_path)
