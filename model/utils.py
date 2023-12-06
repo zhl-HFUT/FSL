@@ -94,7 +94,7 @@ def get_command_line_parser():
 
     parser.add_argument('--n_heads', type=int, default=1) # self-attention heads
 
-    parser.add_argument('--baseinstance_2d_norm', type=str, default=None)
+    parser.add_argument('--baseinstance_2d_norm', action='store_true', default=False)
     parser.add_argument('--z_norm', type=str, default='before_tx', 
                         choices=['before_tx', 'before_euclidian', 'both', None])
     

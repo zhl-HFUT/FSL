@@ -128,8 +128,11 @@ class FEATBaseTransformer3_2d(FewShotModel):
         self.reshape_dim = None
 
         self.baseinstance_2d_norm = None
+        print(args.baseinstance_2d_norm)
+
         if args.baseinstance_2d_norm:
             self.baseinstance_2d_norm = nn.BatchNorm2d(self.hdim)
+        print(self.baseinstance_2d_norm)
 
     def get_simclr_logits(self, simclr_features, temperature_simclr, fc_simclr=None, max_pool=False):
         
