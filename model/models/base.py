@@ -75,7 +75,7 @@ class FewShotModel(nn.Module):
                      torch.Tensor(np.arange(args.way*args.shot, args.way * (args.shot + args.query))).long().view(1, args.query, args.way))
 
     
-    def forward(self, x, ids=None, simclr_images=None, key_cls=None):
+    def forward(self, x, ids=None, simclr_images=None, key_cls=None, test=False):
         # feature extraction
         x = x.squeeze(0)
         instance_embs = self.encoder(x)
@@ -94,6 +94,9 @@ class FewShotModel(nn.Module):
                 support_idx, query_idx, key_cls=key_cls, ids=ids, simclr_embs=simclr_embs)
             return logits, logits_simclr, metrics, sims, pure_index
         else:
+            if test:
+                origin_proto, proto, query = self._forward(instance_embs, support_idx, query_idx, ids, test=test)
+                return origin_proto, proto, query
             logits = self._forward(instance_embs, support_idx, query_idx, ids)
             return logits
 

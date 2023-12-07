@@ -171,7 +171,7 @@ class FEATBaseTransformer3_2d(FewShotModel):
 
         return logits_simclr
 
-    def _forward(self, instance_embs, support_idx, query_idx, ids=None, simclr_embs=None, key_cls=None):
+    def _forward(self, instance_embs, support_idx, query_idx, ids=None, simclr_embs=None, key_cls=None, test=False):
 
         spatial_dim = 5
         n_class = 5
@@ -250,6 +250,9 @@ class FEATBaseTransformer3_2d(FewShotModel):
             
             # attention之后的任务特征入队
             self._dequeue_and_enqueue(feat_task_2, key_cls.cpu())
+        
+        if test:
+            return origin_proto, proto, query
 
         # simclr logits部分
         if self.training:
