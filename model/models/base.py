@@ -27,11 +27,15 @@ class FewShotModel(nn.Module):
         super().__init__()
         self.args = args
 
+        if args.task_feat=='output_max':
+            self.register_buffer("queue", torch.randn(args.K, args.D*2))
+        elif args.task_feat=='hn_mean':
+            self.register_buffer("queue", torch.randn(args.K, args.D))
         self.lstm = BidirectionalLSTM(layer_sizes=[args.D], batch_size=1, vector_dim = args.dim_model*25)
         self.K = args.K
         self.m = args.M
         self.T = args.T
-        self.register_buffer("queue", torch.randn(self.K, args.D))
+        
         self.queue = nn.functional.normalize(self.queue, dim=1)
         self.register_buffer("queue_ptr", torch.zeros(1, dtype=torch.long))
         # classes of task in quene
@@ -90,15 +94,19 @@ class FewShotModel(nn.Module):
             simclr_embs = simclr_embs.reshape(n_embs, n_views, self.hdim, spatial_out, spatial_out)
 
         if self.training:
-            logits, logits_simclr, metrics, sims, pure_index = self._forward(instance_embs, 
+            logits, logits_simclr, metrics, sims, pure_index, logits_blstm = self._forward(instance_embs, 
                 support_idx, query_idx, key_cls=key_cls, ids=ids, simclr_embs=simclr_embs)
-            return logits, logits_simclr, metrics, sims, pure_index
+            return logits, logits_simclr, metrics, sims, pure_index, logits_blstm
         else:
             if test:
                 origin_proto, proto, query = self._forward(instance_embs, support_idx, query_idx, ids, test=test)
                 return origin_proto, proto, query
-            logits = self._forward(instance_embs, support_idx, query_idx, ids)
-            return logits
+            if self.args.use_blstm_meta:
+                logits, logits_blstm = self._forward(instance_embs, support_idx, query_idx, ids, test=test, key_cls=key_cls)
+                return logits, logits_blstm
+            else:
+                logits = self._forward(instance_embs, support_idx, query_idx, ids)
+                return logits
 
     def _forward(self, x, support_idx, query_idx):
         raise NotImplementedError('Suppose to be implemented by subclass')

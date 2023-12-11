@@ -128,11 +128,9 @@ class FEATBaseTransformer3_2d(FewShotModel):
         self.reshape_dim = None
 
         self.baseinstance_2d_norm = None
-        print(args.baseinstance_2d_norm)
 
         if args.baseinstance_2d_norm:
             self.baseinstance_2d_norm = nn.BatchNorm2d(self.hdim)
-        print(self.baseinstance_2d_norm)
 
     def get_simclr_logits(self, simclr_features, temperature_simclr, fc_simclr=None, max_pool=False):
         
@@ -223,33 +221,57 @@ class FEATBaseTransformer3_2d(FewShotModel):
         logits = - torch.mean((proto - query) ** 2, 2) / self.args.temperature
 
         # task feature部分
-        if self.training:
-            # attention之前的任务特征
-            output, hn, cn = self.lstm(origin_proto)
-            feat_task_1 = hn.mean(dim = 0)
-            feat_task_1 = nn.functional.normalize(feat_task_1, dim=1) # (1, 256)
+        # attention之前的任务特征
+        output, hn, cn = self.lstm(origin_proto)
+        if self.args.task_feat=='output_max':
+            feat_task_1, _ =  torch.max(output, dim=0)
+        elif self.args.task_feat=='hn_mean':
+            feat_task_1 =  hn.mean(dim=0)
+        feat_task_1 = nn.functional.normalize(feat_task_1, dim=1) # (1, 256)
 
-            # attention之后的任务特征
-            output, hn, cn = self.lstm(proto.permute(1, 0, 2))
-            feat_task_2 = hn.mean(dim = 0)
-            feat_task_2 = nn.functional.normalize(feat_task_2, dim=1) # (1, 256)
+        # attention之后的任务特征
+        output, hn, cn = self.lstm(proto.permute(1, 0, 2))
+        if self.args.task_feat=='output_max':
+            feat_task_2, _ =  torch.max(output, dim=0)
+        elif self.args.task_feat=='hn_mean':
+            feat_task_2 =  hn.mean(dim=0)
+        feat_task_2 = nn.functional.normalize(feat_task_2, dim=1) # (1, 256)
 
-            # 计算metrics
-            metric_pos = torch.dot(feat_task_2.squeeze(0), feat_task_1.squeeze(0)).unsqueeze(-1)
-            metric_memory = torch.mm(feat_task_2, self.queue.clone().detach().t())
-            metrics = torch.cat((metric_pos, metric_memory.squeeze(0)), dim=0)
-            metrics /= self.T
+        
+        support_lstm = output.squeeze(1)
+        tensor_list = []
+        for feat in query:
+            output, hn, cn = self.lstm(feat.reshape(1, 1, 1600))
+            tensor_list.append(output.reshape(-1))
+        stacked_tensor = torch.stack(tensor_list)
+        reshaped_tensor = stacked_tensor.view(75, 512)
+        if self.args.blstm_norm:
+            support_lstm = nn.functional.normalize(support_lstm, dim=1)
+            reshaped_tensor = nn.functional.normalize(reshaped_tensor, dim=1)
+        if self.args.blstm_metric=='dot':
+            logits_blstm = torch.mm(reshaped_tensor, support_lstm.t()) / self.args.temperature3
+        elif self.args.blstm_metric=='eu':
+            support_lstm = support_lstm.view(1, -1, 512).contiguous() # 1,5,512
+            query = query.view(-1, 1, 512).contiguous() # 75,1,512
+            logits_blstm = - torch.mean((proto - query) ** 2, 2) / self.args.temperature3
 
-            # 计算task overlap sims，得到纯负样本index
-            sims = [1]
-            pure_index = [0]
-            for i in range(self.K):
-                sims.append(len(np.intersect1d(self.classes[i,:], key_cls.cpu()))/5.)
-                if not bool(len(np.intersect1d(self.classes[i,:], key_cls.cpu()))):
-                    pure_index.append(i+1)
-            
-            # attention之后的任务特征入队
-            self._dequeue_and_enqueue(feat_task_2, key_cls.cpu())
+
+        # 计算metrics
+        metric_pos = torch.dot(feat_task_2.squeeze(0), feat_task_1.squeeze(0)).unsqueeze(-1)
+        metric_memory = torch.mm(feat_task_2, self.queue.clone().detach().t())
+        metrics = torch.cat((metric_pos, metric_memory.squeeze(0)), dim=0)
+        metrics /= self.T
+
+        # 计算task overlap sims，得到纯负样本index
+        sims = [1]
+        pure_index = [0]
+        for i in range(self.K):
+            sims.append(len(np.intersect1d(self.classes[i,:], key_cls.cpu()))/5.)
+            if not bool(len(np.intersect1d(self.classes[i,:], key_cls.cpu()))):
+                pure_index.append(i+1)
+        
+        # attention之后的任务特征入队
+        self._dequeue_and_enqueue(feat_task_2, key_cls.cpu())
         
         if test:
             return origin_proto, proto, query
@@ -262,7 +284,7 @@ class FEATBaseTransformer3_2d(FewShotModel):
                     temperature_simclr=self.args.temperature2,
                     fc_simclr=None)
             # 训练时在这里return
-            return logits, logits_simclr, metrics, sims, pure_index    
+            return logits, logits_simclr, metrics, sims, pure_index, logits_blstm
         # 测试时在这里return
         else:
-            return logits
+            return logits, logits_blstm

@@ -78,26 +78,42 @@ def postprocess_args(args):
 def get_command_line_parser():
     parser = argparse.ArgumentParser()
 
-    # 创新点相关
+    # simclr
     parser.add_argument('--return_simclr', type=int, default=None) # number of views in simclr
     parser.add_argument('--balance', type=float, default=0.0)
 
+    # 任务特征
+    parser.add_argument('--tasker', type=str, default='blstm', choices=['blstm', 'attention'])
+    parser.add_argument('--task_feat', type=str, default='hn_mean', choices=['hn_mean', 'output_max', 'cls_token'])
+
+    # blstm分类
+    parser.add_argument('--use_blstm_meta', action='store_true', default=False)
+    parser.add_argument('--blstm_metric', type=str, default='dot', choices=['dot', 'eu'])
+    parser.add_argument('--temperature3', type=float, default=0.1) # 缩放logits
+    parser.add_argument('--blstm_norm', action='store_true', default=False) # 是否归一化
+    parser.add_argument('--logits_mix', type=float, default=0.05)
+
+    # infoNCE
     parser.add_argument('--use_infoNCE', action='store_true', default=False) # use infoNCE loss
     parser.add_argument('--T', type=float, default=0.07) # temperature for infoNCE loss
     parser.add_argument('--K', type=int, default=256) # number of negative samples for infoNCE loss
     parser.add_argument('--D', type=int, default=256)
-    parser.add_argument('--M', type=float, default=0.99) # 没用
+    parser.add_argument('--M', type=float, default=0.99) # 没用，目前并没有动量编码器
 
+    # memory
     parser.add_argument('--mem_init', type=str, default='pre_train', choices=['pre_train', 'random'])
     parser.add_argument('--std_weight', type=float, default=None) # 采样的方差权重；None即直接取均值
     parser.add_argument('--grad_mem', action='store_true', default=False) # memory是否可学习, False进行detach
 
+    # BaseTransformer Attention
     parser.add_argument('--n_heads', type=int, default=1) # self-attention heads
 
+    # BaseTransformer options
     parser.add_argument('--baseinstance_2d_norm', action='store_true', default=False)
     parser.add_argument('--z_norm', type=str, default='before_tx', 
                         choices=['before_tx', 'before_euclidian', 'both', None])
     
+    # 用来缩放logits的
     parser.add_argument('--temperature', type=float, default=0.1)
     parser.add_argument('--temperature2', type=float, default=0.1)
 

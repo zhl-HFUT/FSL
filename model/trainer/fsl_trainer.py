@@ -33,7 +33,7 @@ class FSLTrainer(Trainer):
                     data, gt_label, ids = batch[0].cuda(), batch[1].cuda(), batch[2]
                     data_simclr = None
                 
-                logits, logits_simclr, metrics, sims, pure_index = self.model(data, 
+                logits, logits_simclr, metrics, sims, pure_index, logits_blstm = self.model(data, 
                         ids, simclr_images=data_simclr, key_cls=gt_label[:args.way])
                 loss_meta = F.cross_entropy(logits, label)
                 total_loss = F.cross_entropy(logits, label)
@@ -41,6 +41,9 @@ class FSLTrainer(Trainer):
                 if args.balance > 0:
                     aux_loss = F.cross_entropy(logits_simclr, self.model.label_aux)
                     total_loss += args.balance * aux_loss
+
+                loss_blstm_meta = F.cross_entropy(logits_blstm, label)
+                total_loss += loss_blstm_meta
 
                 loss_infoNCE_neg = torch.tensor(0).cuda()
                 if args.use_infoNCE:
@@ -61,6 +64,7 @@ class FSLTrainer(Trainer):
                     total_loss += loss_infoNCE_neg
                 
                 acc = count_acc(logits, label)
+                acc_blstm = count_acc(logits_blstm, label)
 
                 total_loss.backward()
 
@@ -68,10 +72,11 @@ class FSLTrainer(Trainer):
                 
             self.lr_scheduler.step()
             self.logging(total_loss, loss_meta, loss_infoNCE_neg, acc)
-            self.mini_test()
+            print('blstm-meta acc', acc_blstm, 'loss', loss_blstm_meta.item())
+            self.test(600)
             self.save_model('epoch-last')
             if self.train_epoch%args.test100k_interval == 0:
-                self.test_100k()
+                self.test(10000)
 
             print('ETA:{}/{}'.format(self.timer.measure(), self.timer.measure(self.train_epoch / args.max_epoch)))
     
