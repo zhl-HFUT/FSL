@@ -63,15 +63,12 @@ class Trainer(object, metaclass=abc.ABCMeta):
                 if i == num_task:
                     break
                 data, gt_label, ids = batch[0].cuda(), batch[1].cuda(), batch[2]
+                logits, logits_blstm = self.model(data, ids, key_cls=gt_label[:self.args.way])
+                accs.append(count_acc(logits, label))
                 if self.args.use_blstm_meta:
-                    logits, logits_blstm = self.model(data, ids, key_cls=gt_label[:self.args.way])
-                    accs.append(count_acc(logits, label))
                     accs_blstm.append(count_acc(logits_blstm, label))
                     for i in range(100):
                         accs_mixs[i].append(count_acc(logits+logits_blstm*(i+1)*0.01, label))
-                else:
-                    logits = self.model(data, ids)
-                    accs.append(count_acc(logits, label))
         if self.args.use_blstm_meta:
             print('Test', num_task, f'acc = {np.mean(accs) * 100:.4f}')
             print('Test', num_task, f'blstm acc = {np.mean(accs_blstm) * 100:.4f}')

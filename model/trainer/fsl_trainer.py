@@ -42,8 +42,9 @@ class FSLTrainer(Trainer):
                     aux_loss = F.cross_entropy(logits_simclr, self.model.label_aux)
                     total_loss += args.balance * aux_loss
 
-                loss_blstm_meta = F.cross_entropy(logits_blstm, label)
-                total_loss += loss_blstm_meta
+                if args.use_blstm_meta:
+                    loss_blstm_meta = F.cross_entropy(logits_blstm, label)
+                    total_loss += loss_blstm_meta
 
                 loss_infoNCE_neg = torch.tensor(0).cuda()
                 if args.use_infoNCE:
@@ -72,7 +73,8 @@ class FSLTrainer(Trainer):
                 
             self.lr_scheduler.step()
             self.logging(total_loss, loss_meta, loss_infoNCE_neg, acc)
-            print('blstm-meta acc', acc_blstm, 'loss', loss_blstm_meta.item())
+            if args.use_blstm_meta:
+                print('blstm-meta acc', acc_blstm, 'loss', loss_blstm_meta.item())
             self.test(600)
             self.save_model('epoch-last')
             if self.train_epoch%args.test100k_interval == 0:

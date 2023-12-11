@@ -101,12 +101,8 @@ class FewShotModel(nn.Module):
             if test:
                 origin_proto, proto, query = self._forward(instance_embs, support_idx, query_idx, ids, test=test)
                 return origin_proto, proto, query
-            if self.args.use_blstm_meta:
-                logits, logits_blstm = self._forward(instance_embs, support_idx, query_idx, ids, test=test, key_cls=key_cls)
-                return logits, logits_blstm
-            else:
-                logits = self._forward(instance_embs, support_idx, query_idx, ids)
-                return logits
+            logits, logits_blstm = self._forward(instance_embs, support_idx, query_idx, ids, test=test, key_cls=key_cls)
+            return logits, logits_blstm
 
     def _forward(self, x, support_idx, query_idx):
         raise NotImplementedError('Suppose to be implemented by subclass')
