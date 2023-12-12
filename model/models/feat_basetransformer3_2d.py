@@ -118,7 +118,7 @@ class FEATBaseTransformer3_2d(FewShotModel):
         self.slf_attn = MultiHeadAttention(args.n_heads, args.dim_model, args.dim_model, args.dim_model, dropout=0.5)
         
         import json
-        with open('wordnet_sim_labels.json', 'r') as file:
+        with open('files/wordnet_sim_labels.json', 'r') as file:
             data = json.load(file)
         self.wordnet_sim_labels = data
  

@@ -1,4 +1,4 @@
 #!/bin/bash
 
-git fetch --all
+git fetch --depth 1 master
 git reset --hard origin/master
