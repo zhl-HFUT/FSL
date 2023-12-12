@@ -244,16 +244,16 @@ class FEATBaseTransformer3_2d(FewShotModel):
             output, hn, cn = self.lstm(feat.reshape(1, 1, 1600))
             tensor_list.append(output.reshape(-1))
         stacked_tensor = torch.stack(tensor_list)
-        reshaped_tensor = stacked_tensor.view(75, 512)
+        query_lstm = stacked_tensor.view(75, 512)
         if self.args.blstm_norm:
             support_lstm = nn.functional.normalize(support_lstm, dim=1)
-            reshaped_tensor = nn.functional.normalize(reshaped_tensor, dim=1)
+            query_lstm = nn.functional.normalize(query_lstm, dim=1)
         if self.args.blstm_metric=='dot':
-            logits_blstm = torch.mm(reshaped_tensor, support_lstm.t()) / self.args.temperature3
+            logits_blstm = torch.mm(query_lstm, support_lstm.t()) / self.args.temperature3
         elif self.args.blstm_metric=='eu':
             support_lstm = support_lstm.view(1, -1, 512).contiguous() # 1,5,512
-            query = query.view(-1, 1, 512).contiguous() # 75,1,512
-            logits_blstm = - torch.mean((proto - query) ** 2, 2) / self.args.temperature3
+            query_lstm = query_lstm.view(-1, 1, 512).contiguous() # 75,1,512
+            logits_blstm = - torch.mean((support_lstm - query_lstm) ** 2, 2) / self.args.temperature3
 
 
         # 计算metrics
