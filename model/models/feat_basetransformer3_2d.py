@@ -239,12 +239,8 @@ class FEATBaseTransformer3_2d(FewShotModel):
 
         
         support_lstm = output.squeeze(1)
-        tensor_list = []
-        for feat in query:
-            output, hn, cn = self.lstm(feat.reshape(1, 1, 1600))
-            tensor_list.append(output.reshape(-1))
-        stacked_tensor = torch.stack(tensor_list)
-        query_lstm = stacked_tensor.view(75, 512)
+        query_lstm, _, _ = self.lstm(query.permute(1, 0, 2), batch_size=75)
+        query_lstm = query_lstm.squeeze(0)
         if self.args.blstm_norm:
             support_lstm = nn.functional.normalize(support_lstm, dim=1)
             query_lstm = nn.functional.normalize(query_lstm, dim=1)

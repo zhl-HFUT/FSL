@@ -3,10 +3,9 @@ import torch.nn as nn
 import numpy as np
 
 class BidirectionalLSTM(nn.Module):
-    def __init__(self, layer_sizes, batch_size, vector_dim):
+    def __init__(self, layer_sizes, vector_dim):
         super(BidirectionalLSTM, self).__init__()
 
-        self.batch_size = batch_size
         self.hidden_size = layer_sizes[0]
         self.vector_dim = vector_dim
         self.num_layers = len(layer_sizes)
@@ -16,9 +15,9 @@ class BidirectionalLSTM(nn.Module):
                             hidden_size=self.hidden_size,
                             bidirectional=True)
 
-    def forward(self, inputs):
-        c0 = torch.rand(self.lstm.num_layers*2, self.batch_size, self.lstm.hidden_size, requires_grad=False).cuda()
-        h0 = torch.rand(self.lstm.num_layers*2, self.batch_size, self.lstm.hidden_size, requires_grad=False).cuda()
+    def forward(self, inputs, batch_size=1):
+        c0 = torch.rand(self.lstm.num_layers*2, batch_size, self.lstm.hidden_size, requires_grad=False).cuda()
+        h0 = torch.rand(self.lstm.num_layers*2, batch_size, self.lstm.hidden_size, requires_grad=False).cuda()
         output, (hn, cn) = self.lstm(inputs, (h0, c0))
         return output, hn, cn
 
@@ -31,7 +30,7 @@ class FewShotModel(nn.Module):
             self.register_buffer("queue", torch.randn(args.K, args.D*2))
         elif args.task_feat=='hn_mean':
             self.register_buffer("queue", torch.randn(args.K, args.D))
-        self.lstm = BidirectionalLSTM(layer_sizes=[args.D], batch_size=1, vector_dim = args.dim_model*25)
+        self.lstm = BidirectionalLSTM(layer_sizes=[args.D], vector_dim = args.dim_model*25)
         self.K = args.K
         self.m = args.M
         self.T = args.T
