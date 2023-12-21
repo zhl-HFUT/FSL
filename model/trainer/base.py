@@ -20,9 +20,16 @@ class Trainer(object, metaclass=abc.ABCMeta):
         self.timer = Timer()
 
         self.trlog = {}
-        self.trlog['max_acc'] = 0.0
-        self.trlog['max_acc_epoch'] = 0
-        self.trlog['max_acc_interval'] = 0.0
+        self.trlog['mini_accs_encoder'] = []
+        self.trlog['mini_accs_blstm'] = []
+        self.trlog['mini_accs_mix'] = []
+
+        self.trlog['100k_accs_encoder'] = []
+        self.trlog['100k_accs_blstm'] = []
+        self.trlog['100k_accs_mix'] = []
+
+        self.trlog['mini_max_acc'] = 0.0
+        self.trlog['mini_max_acc_epoch'] = 0
 
     def prepare_label(self):
         args = self.args
@@ -55,27 +62,65 @@ class Trainer(object, metaclass=abc.ABCMeta):
     def test(self, num_task):
         self.model.eval()
         label = torch.arange(self.args.way, dtype=torch.int16).repeat(self.args.query).type(torch.LongTensor).cuda()
-        accs = []
+        accs_encoder = []
         accs_blstm = []
         accs_mixs = [[] for _ in range(100)]
+        acc_mixs = []
         with torch.no_grad():
             for i, batch in enumerate(self.test_loader, 1):
                 if i == num_task:
                     break
                 data, gt_label, ids = batch[0].cuda(), batch[1].cuda(), batch[2]
                 logits, logits_blstm = self.model(data, ids, key_cls=gt_label[:self.args.way])
-                accs.append(count_acc(logits, label))
+                accs_encoder.append(count_acc(logits, label))
                 if self.args.use_blstm_meta:
                     accs_blstm.append(count_acc(logits_blstm, label))
                     for i in range(100):
                         accs_mixs[i].append(count_acc(logits+logits_blstm*(i+1)*0.01, label))
+                if self.args.fast:
+                    break
         if self.args.use_blstm_meta:
-            print('Test', num_task, f'acc = {np.mean(accs) * 100:.4f}')
+            print('Test', num_task, f'encoder acc = {np.mean(accs_encoder) * 100:.4f}')
             print('Test', num_task, f'blstm acc = {np.mean(accs_blstm) * 100:.4f}')
             for i in range(100):
-                print((i+1)/100, f'mix acc = {np.mean(accs_mixs[i]) * 100:.4f}')
+                # print((i+1)/100, f'mix acc = {np.mean(accs_mixs[i]) * 100:.4f}')
+                acc_mixs.append(np.mean(accs_mixs[i]))
+            print('Test', num_task, 'mix', (accs_mixs.index(max(acc_mixs))+1)/100, ':', f'mix acc = {max(acc_mixs) * 100:.4f}')
+            if num_task == 600:
+                if max(acc_mixs) > self.trlog['mini_max_acc']:
+                    self.trlog['mini_max_acc'] = max(acc_mixs)
+                    self.trlog['mini_max_acc_epoch'] = self.train_epoch
+                self.trlog['mini_accs_mix'].append(max(acc_mixs))
+                self.trlog['mini_accs_encoder'].append(np.mean(accs_encoder))
+                self.trlog['mini_accs_blstm'].append(np.mean(accs_blstm))
+            elif num_task == 10000:
+                self.trlog['100k_accs_encoder'].append(np.mean(accs_encoder))
+                self.trlog['100k_accs_blstm'].append(np.mean(accs_blstm))
+                self.trlog['100k_accs_mix'].append(max(acc_mixs))
         else:
-            print('Test', num_task, f'acc = {np.mean(accs) * 100:.4f}')
+            print('Test', num_task, f'acc = {np.mean(accs_encoder) * 100:.4f}')
+            if num_task == 600:
+                if np.mean(accs_encoder) > self.trlog['mini_max_acc']:
+                    self.trlog['mini_max_acc'] = np.mean(accs_encoder)
+                    self.trlog['mini_max_acc_epoch'] = self.train_epoch
+                self.trlog['mini_accs_encoder'].append(np.mean(accs_encoder))
+            elif num_task == 10000:
+                self.trlog['100k_accs_encoder'].append(np.mean(accs_encoder))
+
+        print('best mini_test epoch {}, acc={:.4f}'.format(
+                self.trlog['mini_max_acc_epoch'],
+                self.trlog['mini_max_acc']))
+        print('100k encoder acc', ["{:.4f}".format(ac) for ac in self.trlog['100k_accs_encoder']])
+        if self.args.use_blstm_meta:
+            print('100k blstm acc', ["{:.4f}".format(ac) for ac in self.trlog['100k_accs_blstm']])
+            print('100k mix acc', ["{:.4f}".format(ac) for ac in self.trlog['100k_accs_mix']])
+
+        if self.train_epoch > 20:
+            print('last 20 epoch avg_acc:', "{:.4f}".format(np.mean(self.trlog['mini_accs_encoder'][-20:])))
+            if self.args.use_blstm_meta:
+                print('last 20 epoch avg_acc_blstm:', "{:.4f}".format(np.mean(self.trlog['mini_accs_blstm'][-20:])))
+                print('last 20 epoch avg_acc_mix:', "{:.4f}".format(np.mean(self.trlog['mini_accs_mix'][-20:])))
+
         self.model.train()
     
     def mini_test(self):

@@ -38,7 +38,7 @@ class FSLTrainer(Trainer):
                 loss_meta = F.cross_entropy(logits, label)
                 total_loss = F.cross_entropy(logits, label)
 
-                if args.balance > 0:
+                if args.use_simclr:
                     aux_loss = F.cross_entropy(logits_simclr, self.model.label_aux)
                     total_loss += args.balance * aux_loss
 
@@ -70,6 +70,9 @@ class FSLTrainer(Trainer):
                 total_loss.backward()
 
                 self.optimizer.step() 
+
+                if args.fast:
+                    break
                 
             self.lr_scheduler.step()
             self.logging(total_loss, loss_meta, loss_infoNCE_neg, acc)

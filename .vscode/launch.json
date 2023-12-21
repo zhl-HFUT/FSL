@@ -32,7 +32,7 @@
                 "0.0002",
                 "--step_size",
                 "40",
-                "--baseinstance_2d_norm",
+                "--bn2d",
                 "True",
                 "--wandb_mode",
                 "disabled",

@@ -5,9 +5,9 @@ import torch.nn.functional as F
 import torch.nn as nn
 import random
 
-def custom_normal(memorys, weights):
+def custom_normal(memorys):
     means = memorys[:, :, :, 0]
-    stds = memorys[:, :, :, 1] * weights
+    stds = memorys[:, :, :, 1] * 0.33
     return torch.normal(means, stds)
 
 class ScaledDotProductAttention(nn.Module):
@@ -127,10 +127,10 @@ class FEATBaseTransformer3_2d(FewShotModel):
         self.choose = None
         self.reshape_dim = None
 
-        self.baseinstance_2d_norm = None
+        self.bn2d = None
 
-        if args.baseinstance_2d_norm:
-            self.baseinstance_2d_norm = nn.BatchNorm2d(self.hdim)
+        if args.bn2d:
+            self.bn2d = nn.BatchNorm2d(self.hdim)
 
     def get_simclr_logits(self, simclr_features, temperature_simclr, fc_simclr=None, max_pool=False):
         
@@ -140,7 +140,7 @@ class FEATBaseTransformer3_2d(FewShotModel):
             simclr_features = fc_simclr(simclr_features)
 
         max_pool=True
-        if max_pool:
+        if max_pool and spatial != 1:
             simclr_features = simclr_features.reshape(n_batch*n_views, n_c, spatial, spatial)
             simclr_features = F.max_pool2d(simclr_features, kernel_size=5)
             simclr_features = simclr_features.reshape(n_batch, n_views, n_c, 1, 1)
@@ -171,7 +171,7 @@ class FEATBaseTransformer3_2d(FewShotModel):
 
     def _forward(self, instance_embs, support_idx, query_idx, ids=None, simclr_embs=None, key_cls=None, test=False):
 
-        spatial_dim = 5
+        spatial_dim = self.args.spatial_dim
         n_class = 5
         n_simcls = 5
         n_batch = 1
@@ -183,20 +183,12 @@ class FEATBaseTransformer3_2d(FewShotModel):
         
         if self.training:
             self.wordnet_sim_labels['n0461250400'][4] = random.choice([21, 49, 52, 40])
-            top_indices = np.stack([self.wordnet_sim_labels[id_[:11]] for id_ in ids[:5]], axis=0)
-            if self.args.std_weight is not None:
-                base_protos = custom_normal(self.memory[torch.Tensor(top_indices).long()], self.args.std_weight).reshape(n_class, n_simcls, emb_dim, spatial_dim, spatial_dim)
-            else:
-                base_protos = self.memory[torch.Tensor(top_indices).long()][:, :, :, 0].reshape(n_class, n_simcls, emb_dim, spatial_dim, spatial_dim)
-            if self.args.grad_mem is False:
-                base_protos = base_protos.detach()
-        else:
-            top_indices = np.stack([self.wordnet_sim_labels[id_[:11]] for id_ in ids[:5]], axis=0)
-            base_protos = self.memory[torch.Tensor(top_indices).long()][:, :, :, 0].reshape(n_class, n_simcls, emb_dim, spatial_dim, spatial_dim)
+        top_indices = np.stack([self.wordnet_sim_labels[id_[:11]] for id_ in ids[:5]], axis=0)
+        base_protos = self.memory[torch.Tensor(top_indices).long()].reshape(n_class, n_simcls, emb_dim, spatial_dim, spatial_dim)
 
-        if self.baseinstance_2d_norm:
+        if self.bn2d:
             base_protos = base_protos.reshape(n_class*n_simcls, emb_dim, spatial_dim, spatial_dim)
-            base_protos = self.baseinstance_2d_norm(base_protos)
+            base_protos = self.bn2d(base_protos)
             base_protos = base_protos.reshape(n_class, n_simcls, emb_dim, spatial_dim, spatial_dim)
 
         if self.args.z_norm=='before_tx':
@@ -212,17 +204,31 @@ class FEATBaseTransformer3_2d(FewShotModel):
         combined_bases = base_protos.permute(0, 1, 3, 4, 2).reshape(n_class, n_simcls*spatial_dim*spatial_dim, emb_dim).contiguous() # 5,125,64
 
         # 在此做attention增强
-        proto = self.slf_attn(proto, combined_bases, combined_bases) # 5,25,64
-        proto = proto.permute(0, 2, 1).contiguous() # 5,64,25
+        proto = self.slf_attn(proto, combined_bases, combined_bases)
+        proto = proto.permute(0, 2, 1).contiguous() # 5, -1, n*n
+
+
+        # 维度统一
+        origin_proto = origin_proto.reshape(5, -1)
+        proto = proto.reshape(5, -1)
+        query = query.reshape(75, -1)
 
         # 计算logits-meta
-        proto = proto.view(1, -1, emb_dim*spatial_dim*spatial_dim).contiguous() # 1,5,1600
-        query = query.view(-1, 1, emb_dim*spatial_dim*spatial_dim).contiguous() # 75,1,1600
-        logits = - torch.mean((proto - query) ** 2, 2) / self.args.temperature
+        if self.args.metric=='eu':
+            logits = - torch.mean((proto.unsqueeze(0) - query.unsqueeze(1)) ** 2, 2) / self.args.temperature
+        elif self.args.metric=='cos':
+            proto_normalized = nn.functional.normalize(proto, dim=1)
+            query_normalized = nn.functional.normalize(query, dim=1)
+            logits = torch.mm(query_normalized, proto_normalized.t()) / self.args.temperature
+        elif self.args.metric=='dot':
+            logits = torch.mm(query, proto.t()) / self.args.temperature
+        elif self.args.metric=='proj':
+            proto_normalized = nn.functional.normalize(proto, dim=1)
+            logits = torch.mm(query, proto_normalized.t()) / self.args.temperature
 
         # task feature部分
         # attention之前的任务特征
-        output, hn, cn = self.lstm(origin_proto)
+        output, hn, cn = self.lstm(origin_proto.unsqueeze(1))
         if self.args.task_feat=='output_max':
             feat_task_1, _ =  torch.max(output, dim=0)
         elif self.args.task_feat=='hn_mean':
@@ -230,26 +236,33 @@ class FEATBaseTransformer3_2d(FewShotModel):
         feat_task_1 = nn.functional.normalize(feat_task_1, dim=1) # (1, 256)
 
         # attention之后的任务特征
-        output, hn, cn = self.lstm(proto.permute(1, 0, 2))
+        output, hn, cn = self.lstm(proto.unsqueeze(1))
         if self.args.task_feat=='output_max':
             feat_task_2, _ =  torch.max(output, dim=0)
         elif self.args.task_feat=='hn_mean':
             feat_task_2 =  hn.mean(dim=0)
         feat_task_2 = nn.functional.normalize(feat_task_2, dim=1) # (1, 256)
 
+        support_lstm = output.reshape(5, -1)
+
+        tensor_list = []
+        for feat in query:
+            output, hn, cn = self.lstm(feat.reshape(1, 1, -1))
+            tensor_list.append(output.reshape(-1))
+        stacked_tensor = torch.stack(tensor_list)
+        query_lstm = stacked_tensor.reshape(75, -1)
         
-        support_lstm = output.squeeze(1)
-        query_lstm, _, _ = self.lstm(query.permute(1, 0, 2), batch_size=75)
-        query_lstm = query_lstm.squeeze(0)
-        if self.args.blstm_norm:
-            support_lstm = nn.functional.normalize(support_lstm, dim=1)
-            query_lstm = nn.functional.normalize(query_lstm, dim=1)
         if self.args.blstm_metric=='dot':
             logits_blstm = torch.mm(query_lstm, support_lstm.t()) / self.args.temperature3
+        elif self.args.blstm_metric=='proj':
+            support_lstm = nn.functional.normalize(support_lstm, dim=1)
+            logits_blstm = torch.mm(query_lstm, support_lstm.t()) / self.args.temperature3
+        elif self.args.blstm_metric=='cos':
+            support_lstm = nn.functional.normalize(support_lstm, dim=1)
+            query_lstm = nn.functional.normalize(query_lstm, dim=1)
+            logits_blstm = torch.mm(query_lstm, support_lstm.t()) / self.args.temperature3
         elif self.args.blstm_metric=='eu':
-            support_lstm = support_lstm.view(1, -1, 512).contiguous() # 1,5,512
-            query_lstm = query_lstm.view(-1, 1, 512).contiguous() # 75,1,512
-            logits_blstm = - torch.mean((support_lstm - query_lstm) ** 2, 2) / self.args.temperature3
+            logits_blstm = - torch.mean((support_lstm.unsqueeze(0) - query_lstm.unsqueeze(1)) ** 2, 2) / self.args.temperature3
 
 
         # 计算metrics

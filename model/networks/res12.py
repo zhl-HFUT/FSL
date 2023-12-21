@@ -72,19 +72,15 @@ class BasicBlock(nn.Module):
 
 class ResNet(nn.Module):
 
-    def __init__(self, block=BasicBlock, keep_prob=1.0, avg_pool=True, 
-        drop_rate=0.1, dropblock_size=5, out_dim=640):
+    def __init__(self, block=BasicBlock, keep_prob=1.0, drop_rate=0.1, dropblock_size=5, out_dim=640, pooling=None):
         self.inplanes = 3
         super(ResNet, self).__init__()
-        # avg_pool=False
+        self.pooling = pooling
         self.layer1 = self._make_layer(block, 64, stride=2, drop_rate=drop_rate)
         self.layer2 = self._make_layer(block, 160, stride=2, drop_rate=drop_rate)
         self.layer3 = self._make_layer(block, 320, stride=2, drop_rate=drop_rate, drop_block=True, block_size=dropblock_size)
         self.layer4 = self._make_layer(block, out_dim, stride=2, drop_rate=drop_rate, drop_block=True, block_size=dropblock_size)
-        if avg_pool:
-            self.avgpool = nn.AvgPool2d(5, stride=1)
         self.keep_prob = keep_prob
-        self.keep_avg_pool = avg_pool
         self.dropout = nn.Dropout(p=1 - self.keep_prob, inplace=False)
         self.drop_rate = drop_rate
         for m in self.modules():
@@ -114,12 +110,14 @@ class ResNet(nn.Module):
         x = self.layer2(x)
         x = self.layer3(x)
         x = self.layer4(x)
-        if self.keep_avg_pool:
-            x = self.avgpool(x)
+        if self.pooling == 'max':
+            x = F.max_pool2d(x, kernel_size=5)
+        if self.pooling == 'mean':
+            x = F.avg_pool2d(x, kernel_size=5)
         return x
 
-def Res12(keep_prob=1.0, avg_pool=False, **kwargs):
+def Res12(keep_prob=1.0, pooling=None, **kwargs):
     """Constructs a ResNet-12 model.
     """
-    model = ResNet(BasicBlock, keep_prob=keep_prob, avg_pool=avg_pool, **kwargs)
+    model = ResNet(BasicBlock, keep_prob=keep_prob, pooling=pooling, **kwargs)
     return model

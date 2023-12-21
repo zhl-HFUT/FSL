@@ -30,7 +30,7 @@ class FewShotModel(nn.Module):
             self.register_buffer("queue", torch.randn(args.K, args.D*2))
         elif args.task_feat=='hn_mean':
             self.register_buffer("queue", torch.randn(args.K, args.D))
-        self.lstm = BidirectionalLSTM(layer_sizes=[args.D], vector_dim = args.dim_model*25)
+        self.lstm = BidirectionalLSTM(layer_sizes=[args.D], vector_dim = args.dim_model*args.spatial_dim*args.spatial_dim)
         self.K = args.K
         self.m = args.M
         self.T = args.T
@@ -41,19 +41,30 @@ class FewShotModel(nn.Module):
         self.classes = np.ones((self.K, args.way), dtype=int)*1000
 
         if args.mem_init == 'random':
-            self.memory = nn.Parameter(torch.randn(64, args.dim_model*25, 2))
-        elif args.mem_init =='pre_train':
-            self.memory = nn.Parameter(torch.load(args.mean_std))
+            memory_tensor = torch.randn(64, args.dim_model*args.spatial_dim*args.spatial_dim)
+        elif args.mem_init == 'pre_train':
+            memory_tensor = torch.load(args.mean_std)[:, :, 0]
+            if args.mem_init_pooling == 'max':
+                memory_tensor = nn.functional.max_pool2d(memory_tensor.reshape(64, -1, 5, 5), kernel_size=5)
+            if args.mem_init_pooling == 'mean':
+                memory_tensor = nn.functional.avg_pool2d(memory_tensor.reshape(64, -1, 5, 5), kernel_size=5)
+        if args.mem_2d_norm:
+            memory_tensor = memory_tensor.view(64, args.dim_model, args.spatial_dim, args.spatial_dim)
+            memory_tensor = nn.functional.normalize(memory_tensor, dim=1)
+            memory_tensor = memory_tensor.view(64, args.dim_model*args.spatial_dim*args.spatial_dim)
+        if args.mem_grad:
+            self.memory = nn.Parameter(memory_tensor.reshape(64, -1))
+        else:
+            self.register_buffer("memory", memory_tensor.reshape(64, -1))
 
         if args.backbone_class == 'ConvNet':
             from model.networks.convnet import ConvNet
-            self.encoder = ConvNet()
+            self.encoder = ConvNet(pooling=args.pooling)
             hdim = 64
         elif args.backbone_class == 'Res12':
             hdim = args.dim_model
             from model.networks.res12 import ResNet
-            self.encoder = ResNet(avg_pool=False, 
-                drop_rate=args.drop_rate, out_dim=hdim)
+            self.encoder = ResNet(drop_rate=args.drop_rate, out_dim=hdim, pooling=args.pooling)
         else:
             raise ValueError('')
         self.hdim = hdim

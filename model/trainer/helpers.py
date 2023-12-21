@@ -87,7 +87,10 @@ def prepare_model(args):
     return model
 
 def prepare_optimizer(model, args):
-    top_para = [v for k,v in model.named_parameters() if 'encoder' not in k]       
+    top_para = [v for k,v in model.named_parameters() if 'encoder' not in k] 
+    for k,v in model.named_parameters():
+        if 'encoder' not in k:
+            print('10x lr rate:', k)
     # as in the literature, we use ADAM for ConvNet and SGD for other backbones
     if args.backbone_class == 'ConvNet':
         optimizer = optim.Adam(

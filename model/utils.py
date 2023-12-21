@@ -68,57 +68,66 @@ def postprocess_args(args):
         args.init_weights = './files/mini_r12_ver2_corrected_140403.pth'
         args.mean_std = './files/mean_std_res12.pth'
         args.dim_model = 640
+    if args.use_simclr:
+        args.return_simclr = 2
+    extra_path = str(args.dataset) + '_' + str(args.backbone_class) + '_' + str(args.shot) + 'shot' + '/'
+    print(extra_path)
     if os.path.exists('/output'):
-        args.save_path = '/output/' + '_{}'.format(str(time.strftime('%Y%m%d_%H%M%S', time.localtime())))
+        args.save_path = '/output/' + '_{}'.format(str(time.strftime('%Y%m%d_%H%M%S', time.localtime(time.time()+28800))))
     else:
-        args.save_path = 'checkpoints/' + '_{}'.format(str(time.strftime('%Y%m%d_%H%M%S', time.localtime())))
-    os.mkdir(args.save_path)
+        args.save_path = 'checkpoints/' + extra_path + str(time.strftime('%Y_%m_%d_%H%M%S', time.localtime(time.time()+28800)))
+    os.makedirs(args.save_path)
     return args
 
 def get_command_line_parser():
     parser = argparse.ArgumentParser()
 
+    # 训练参数
+    parser.add_argument('--backbone_class', type=str, default='ConvNet', choices=['ConvNet', 'Res12'])
+    parser.add_argument('--metric', type=str, default='dot', choices=['dot', 'proj', 'cos', 'eu'])
+    parser.add_argument('--spatial_dim', type=int, default=5)
+    parser.add_argument('--pooling', type=str, default=None, choices=['max', 'mean'])
+    parser.add_argument('--shot', type=int, default=1)
+    parser.add_argument('--max_epoch', type=int, default=200)
+    parser.add_argument('--lr', type=float, default=0.0001)
+    parser.add_argument('--step_size', type=str, default='20')
+    
+    # MemoryTransformers
+    parser.add_argument('--mem_init', type=str, default='pre_train', choices=['pre_train', 'random'])
+    parser.add_argument('--mem_grad', action='store_true', default=False) # memory是否学习
+    parser.add_argument('--mem_2d_norm', action='store_true', default=False) # 是否在640维度归一化
+    parser.add_argument('--mem_sample', type=float, default=None) # 是否将memory看作分布，暂时弃用
+    # 如果spatial_dim是1，需要pooling
+    parser.add_argument('--mem_init_pooling', type=str, default=None, choices=['max', 'mean'])
+    parser.add_argument('--temperature', type=float, default=0.1) # 缩放小样本logits
+    parser.add_argument('--n_heads', type=int, default=1) # self-attention heads
     # simclr
+    parser.add_argument('--use_simclr', action='store_true', default=False)
     parser.add_argument('--return_simclr', type=int, default=None) # number of views in simclr
-    parser.add_argument('--balance', type=float, default=0.0)
-
-    # 任务特征
-    parser.add_argument('--tasker', type=str, default='blstm', choices=['blstm', 'attention'])
-    parser.add_argument('--task_feat', type=str, default='hn_mean', choices=['hn_mean', 'output_max', 'cls_token'])
-
-    # blstm分类
-    parser.add_argument('--use_blstm_meta', action='store_true', default=False)
-    parser.add_argument('--blstm_metric', type=str, default='dot', choices=['dot', 'eu'])
-    parser.add_argument('--temperature3', type=float, default=0.1) # 缩放logits
-    parser.add_argument('--blstm_norm', action='store_true', default=False) # 是否归一化
-    parser.add_argument('--logits_mix', type=float, default=0.05)
+    parser.add_argument('--balance', type=float, default=0.1)
+    parser.add_argument('--temperature2', type=float, default=0.1)
+    # BatchNorm
+    parser.add_argument('--bn2d', action='store_true', default=False)
 
     # infoNCE
-    parser.add_argument('--use_infoNCE', action='store_true', default=False) # use infoNCE loss
+    parser.add_argument('--use_infoNCE', action='store_true', default=False)
+    parser.add_argument('--tasker', type=str, default='blstm', choices=['blstm', 'attention']) # 目前只有blstm
+    parser.add_argument('--task_feat', type=str, default='output_max', choices=['hn_mean', 'output_max', 'cls_token'])
     parser.add_argument('--T', type=float, default=0.07) # temperature for infoNCE loss
-    parser.add_argument('--K', type=int, default=256) # number of negative samples for infoNCE loss
+    parser.add_argument('--K', type=int, default=256) # （负样本）队列长度
     parser.add_argument('--D', type=int, default=256)
     parser.add_argument('--M', type=float, default=0.99) # 没用，目前并没有动量编码器
 
-    # memory
-    parser.add_argument('--mem_init', type=str, default='pre_train', choices=['pre_train', 'random'])
-    parser.add_argument('--std_weight', type=float, default=None) # 采样的方差权重；None即直接取均值
-    parser.add_argument('--grad_mem', action='store_true', default=False) # memory是否可学习, False进行detach
+    # blstm分类
+    parser.add_argument('--use_blstm_meta', action='store_true', default=False)
+    parser.add_argument('--blstm_metric', type=str, default='dot', choices=['dot', 'proj', 'cos', 'eu'])
+    parser.add_argument('--temperature3', type=float, default=0.1) # 缩放logits
+    parser.add_argument('--logits_mix', type=float, default=0.05) # 没用，目前会遍历这个参数
 
-    # BaseTransformer Attention
-    parser.add_argument('--n_heads', type=int, default=1) # self-attention heads
-
-    # BaseTransformer options
-    parser.add_argument('--baseinstance_2d_norm', action='store_true', default=False)
-    parser.add_argument('--z_norm', type=str, default='before_tx', 
-                        choices=['before_tx', 'before_euclidian', 'both', None])
+    # z_norm全是这个默认设置，先不管
+    parser.add_argument('--z_norm', type=str, default='before_tx', choices=['before_tx', 'before_euclidian', 'both', None])
     
-    # 用来缩放logits的
-    parser.add_argument('--temperature', type=float, default=0.1)
-    parser.add_argument('--temperature2', type=float, default=0.1)
-
     # 训练，测试，记录相关
-    parser.add_argument('--max_epoch', type=int, default=200)
     parser.add_argument('--episodes_per_epoch', type=int, default=100)
     parser.add_argument('--num_eval_episodes', type=int, default=600)
     parser.add_argument('--log_interval', type=int, default=100)
@@ -128,10 +137,7 @@ def get_command_line_parser():
     # 模型
     parser.add_argument('--model_class', type=str, default='FEATBaseTransformer3_2d', 
                         choices=['MatchNet', 'ProtoNet', 'FEAT','FEATBaseTransformer3_2d'])
-    parser.add_argument('--backbone_class', type=str, default='ConvNet',
-                        choices=['ConvNet', 'Res12'])
     parser.add_argument('--way', type=int, default=5)
-    parser.add_argument('--shot', type=int, default=1)
     parser.add_argument('--query', type=int, default=15)
     
     # 数据集
@@ -142,10 +148,8 @@ def get_command_line_parser():
     parser.add_argument('--use_im_cache', action='store_true', default=False)
     
     # 学习率
-    parser.add_argument('--lr', type=float, default=0.0001)
     parser.add_argument('--lr_mul', type=float, default=10)    
     parser.add_argument('--lr_scheduler', type=str, default='step', choices=['multistep', 'step', 'cosine', 'onecycle', 'cyclic'])
-    parser.add_argument('--step_size', type=str, default='20')
     parser.add_argument('--gamma', type=float, default=0.5)    
     parser.add_argument('--momentum', type=float, default=0.9) #SGD momentum
     parser.add_argument('--drop_rate', type=float, default=0.1)
