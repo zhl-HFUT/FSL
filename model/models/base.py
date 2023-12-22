@@ -43,7 +43,7 @@ class FewShotModel(nn.Module):
         if args.mem_init == 'random':
             memory_tensor = torch.randn(64, args.dim_model*args.spatial_dim*args.spatial_dim)
         elif args.mem_init == 'pre_train':
-            memory_tensor = torch.load(args.mean_std)[:, :, 0]
+            memory_tensor = torch.load(args.mean_std)
             if args.mem_init_pooling == 'max':
                 memory_tensor = nn.functional.max_pool2d(memory_tensor.reshape(64, -1, 5, 5), kernel_size=5)
             if args.mem_init_pooling == 'mean':

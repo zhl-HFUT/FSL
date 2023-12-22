@@ -62,11 +62,11 @@ def compute_confidence_interval(data):
 def postprocess_args(args):
     if args.backbone_class == 'ConvNet':
         args.init_weights = './files/mini_conv4_ver11_113120.pth'
-        args.mean_std = './files/mean_std_conv4.pth'
+        args.mean_std = './files/proto_conv4.pth'
         args.dim_model = 64
     elif args.backbone_class == 'Res12':
         args.init_weights = './files/mini_r12_ver2_corrected_140403.pth'
-        args.mean_std = './files/mean_std_res12.pth'
+        args.mean_std = './files/proto_res12.pth'
         args.dim_model = 640
     if args.use_simclr:
         args.return_simclr = 2

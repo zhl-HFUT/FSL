@@ -19,7 +19,7 @@ if __name__ == '__main__':
     parser = get_command_line_parser()
     args = postprocess_args(parser.parse_args())
 
-    args.fast = True
+    args.fast = False
 
     set_gpu(args.gpu)
 
