@@ -85,7 +85,7 @@ class Trainer(object, metaclass=abc.ABCMeta):
             for i in range(100):
                 # print((i+1)/100, f'mix acc = {np.mean(accs_mixs[i]) * 100:.4f}')
                 acc_mixs.append(np.mean(accs_mixs[i]))
-            print('Test', num_task, 'mix', (accs_mixs.index(max(acc_mixs))+1)/100, ':', f'mix acc = {max(acc_mixs) * 100:.4f}')
+            print('Test', num_task, 'mix', (acc_mixs.index(max(acc_mixs))+1)/100, ':', f'mix acc = {max(acc_mixs) * 100:.4f}')
             if num_task == 600:
                 if max(acc_mixs) > self.trlog['mini_max_acc']:
                     self.trlog['mini_max_acc'] = max(acc_mixs)
