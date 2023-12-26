@@ -22,6 +22,20 @@ class FSLTrainer(Trainer):
 
         for epoch in range(1, args.max_epoch + 1):
             self.train_epoch += 1
+            if self.train_epoch % 40 < 20:
+                for param in self.model.encoder.parameters():
+                    param.requires_grad = False
+                for param in self.model.slf_attn.parameters():
+                    param.requires_grad = False
+                for param in self.model.lstm.parameters():
+                    param.requires_grad = True
+            elif self.train_epoch % 40 >= 20:
+                for param in self.model.encoder.parameters():
+                    param.requires_grad = True
+                for param in self.model.slf_attn.parameters():
+                    param.requires_grad = True
+                for param in self.model.lstm.parameters():
+                    param.requires_grad = False
             self.model.train()
             for batch in self.train_loader:
                 self.optimizer.zero_grad()
