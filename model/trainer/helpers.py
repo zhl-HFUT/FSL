@@ -87,22 +87,23 @@ def prepare_model(args):
     return model
 
 def prepare_optimizer(model, args):
-    top_para = [v for k,v in model.named_parameters() if 'encoder' not in k] 
-    for k,v in model.named_parameters():
-        if 'encoder' not in k:
-            print('10x lr rate:', k)
+    attn_para = [v for k,v in model.named_parameters() if 'attn' in k] 
+    blstm_para = [v for k,v in model.named_parameters() if 'blstm' in k]
+
     # as in the literature, we use ADAM for ConvNet and SGD for other backbones
     if args.backbone_class == 'ConvNet':
         optimizer = optim.Adam(
             [{'params': model.encoder.parameters()},
-             {'params': top_para, 'lr': args.lr * args.lr_mul}],
+             {'params': attn_para, 'lr': args.lr * args.lr_mul},
+             {'params': blstm_para, 'lr': args.lr * args.lr_mul}],
             lr=args.lr,
             # weight_decay=args.weight_decay, do not use weight_decay here
         )                
     else:
         optimizer = optim.SGD(
             [{'params': model.encoder.parameters()},
-             {'params': top_para, 'lr': args.lr * args.lr_mul}],
+             {'params': attn_para, 'lr': args.lr * args.lr_mul},
+             {'params': blstm_para, 'lr': args.lr * args.lr_mul}],
             lr=args.lr,
             momentum=args.momentum,
             nesterov=True,
