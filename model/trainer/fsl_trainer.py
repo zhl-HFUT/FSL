@@ -22,14 +22,16 @@ class FSLTrainer(Trainer):
 
         for epoch in range(1, args.max_epoch + 1):
             self.train_epoch += 1
-            if self.train_epoch % 40 < 20:
+            if (self.train_epoch % 80 <= 40 and self.train_epoch % 80 != 0) or self.train_epoch == 0:
+                print('001')
                 for param in self.model.encoder.parameters():
                     param.requires_grad = False
                 for param in self.model.slf_attn.parameters():
                     param.requires_grad = False
                 for param in self.model.lstm.parameters():
                     param.requires_grad = True
-            elif self.train_epoch % 40 >= 20:
+            else:
+                print('110')
                 for param in self.model.encoder.parameters():
                     param.requires_grad = True
                 for param in self.model.slf_attn.parameters():
