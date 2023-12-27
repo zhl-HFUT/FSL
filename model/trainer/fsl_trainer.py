@@ -36,6 +36,12 @@ class FSLTrainer(Trainer):
                     param.requires_grad = True
                 for param in self.model.lstm.parameters():
                     param.requires_grad = False
+            if self.train_epoch % 80 == 0:
+                print('update memory')
+                print('......')
+                self.model.update_memory()
+                print('......')
+                print('update memory done')
             self.model.train()
             for batch in self.train_loader:
                 self.optimizer.zero_grad()

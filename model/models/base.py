@@ -79,6 +79,28 @@ class FewShotModel(nn.Module):
         ptr = (ptr + 1) % self.K  
         self.queue_ptr[0] = ptr
 
+    @torch.no_grad()
+    def update_memory(self):
+        self.eval()
+        from model.dataloader.mini_imagenet import MiniImageNet as Dataset
+        from torch.utils.data import DataLoader
+        trainset = Dataset('train', self.args, augment=False, return_id=True, return_simclr=self.args.return_simclr)
+        train_loader = DataLoader(dataset=trainset,
+                                    num_workers=self.args.num_workers,
+                                    shuffle=False,
+                                    pin_memory=True)
+        from tqdm import tqdm
+        embs = torch.zeros(38400, 1600)
+        new_protos = torch.zeros(64, 1600)
+        for i, batch in tqdm(enumerate(train_loader, 1)):
+            data, gt_label, ids = batch[0].cuda(), batch[1].cuda(), batch[2]
+            embs[i-1] = self.encoder(data).reshape(-1).detach().cpu()
+
+        for i in range(64):
+            new_protos[i] = embs[i*600:(i+1)*600].mean(dim=0)
+
+        self.memory = new_protos.cuda()
+
     def split_instances(self):
         args = self.args
         if self.training:
